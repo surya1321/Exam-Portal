@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { Providers } from "@/components/providers/query-provider";
-
+import { Toaster } from "@/components/ui/sonner";
 
 const inter = Inter({
   variable: "--font-display",
@@ -10,8 +10,8 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Minimalist MCQ Exam Interface",
-  description: "Exam Portal Interface",
+  title: "Exam Portal",
+  description: "Secure online examination platform",
 };
 
 export default function RootLayout({
@@ -32,7 +32,10 @@ export default function RootLayout({
       <body
         className={`${inter.variable} bg-background-light dark:bg-background-dark font-display text-slate-900 dark:text-slate-100 antialiased h-screen flex flex-col overflow-hidden`}
       >
-        <Providers>{children}</Providers>
+        <Providers>
+          {children}
+          <Toaster />
+        </Providers>
       </body>
     </html>
   );
