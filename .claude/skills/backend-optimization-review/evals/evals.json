@@ -1,0 +1,23 @@
+{
+  "skill_name": "backend-optimization-review",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "hey can you review my FastAPI service? it's a multi-tenant SaaS app, each customer has their own PostgreSQL database. i've been getting timeout errors under load and my team says the queries might be slow but i'm not sure where to start. the main files are app/routes/users.py, app/services/user_service.py, and app/models.py",
+      "expected_output": "A full multi-agent backend optimization report identifying N+1 query patterns, missing eager loading, async correctness issues, connection pool configuration, and any tenant isolation concerns — with before/after code for each finding, a severity-ranked findings table, compound issue cross-correlations, and a remediation roadmap.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "we're about to go from 2 servers to 10 servers for our FastAPI app and i'm worried we'll hit database connection limits. right now each uvicorn worker has pool_size=15 and we run 4 workers per server. postgres max_connections is still at the default. should i be worried? what do i need to change?",
+      "expected_output": "A scalability-focused analysis that applies the connection math formula (2×4×15=120, 10×4×15=600 — both exceeding default 100), recommends PgBouncer in transaction mode with config, adjusts pool_size, and mentions auto-scaling readiness and stateless service checks.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "can you audit all the async code in my FastAPI endpoints? i think some of them might be blocking the event loop. here's an example endpoint that's been slow:\n\n```python\n@router.post('/reports/generate')\nasync def generate_report(payload: ReportRequest, session: AsyncSession = Depends(get_db)):\n    users = session.query(User).filter(User.org_id == payload.org_id).all()\n    report_data = []\n    for user in users:\n        orders = session.query(Order).filter(Order.user_id == user.id).all()\n        report_data.append({'user': user.name, 'orders': len(orders)})\n    pdf = generate_pdf(report_data)  # takes 5-10 seconds\n    return Response(pdf, media_type='application/pdf')\n```",
+      "expected_output": "An async & concurrency analysis identifying: synchronous SQLAlchemy session.query() in async context (Blocker), N+1 query pattern (orders fetched per user in loop), CPU-bound PDF generation blocking event loop (Blocker), missing selectinload for User.orders relationship. Should provide corrected async version using AsyncSession, selectinload, and run_in_executor for PDF generation.",
+      "files": []
+    }
+  ]
+}
