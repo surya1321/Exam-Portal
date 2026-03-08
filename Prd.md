@@ -89,22 +89,25 @@ The system emphasizes exam integrity through features such as forward-only navig
 
 | Layer | Technology | Notes |
 |-------|-----------|-------|
-| Frontend | React.js + TypeScript | SPA with Tailwind CSS for UI; React Router for navigation |
-| Backend | Node.js + Express.js | RESTful API server with JWT-based authentication |
-| Database | PostgreSQL | Relational DB for structured exam data; supports complex queries |
-| ORM | Prisma / Sequelize | Type-safe database queries and schema migrations |
-| Authentication | JWT + bcrypt | Token-based auth; passwords hashed with bcrypt (salt rounds: 12) |
-| Timer Service | Server-side (Redis) | Exam start time stored in Redis; timer validated server-side |
-| File Storage | AWS S3 / Local | For question images, attachments, and exported reports |
-| Deployment | Docker + AWS / Railway | Containerized deployment with CI/CD pipeline |
+| Framework | Next.js 16 (App Router) + TypeScript | Full-stack framework — RSC for frontend, Server Actions & Route Handlers for backend |
+| Database | PostgreSQL (via Supabase) | Managed PostgreSQL with row-level security and real-time capabilities |
+| ORM | Prisma | Type-safe database queries and schema migrations against Supabase Postgres |
+| Authentication | Supabase Auth | Built-in OAuth, magic links, and email/password auth with session management |
+| File Storage | Supabase Storage | Managed S3-compatible object storage for question images and exported reports |
+| State / Data Fetching | TanStack Query | Client-side caching, loading states, and mutation management |
+| Forms & Validation | React Hook Form + Zod | Schema-validated forms on both client and server |
+| UI Components | Shadcn/UI + Tailwind CSS v4 | Accessible component library with utility-first styling |
+| Deployment | Vercel | Zero-config Next.js deployment with edge functions and CI/CD |
 | Testing | Jest + React Testing Library | Unit, integration, and end-to-end tests |
 
 ### 6.2 System Architecture (High Level)
 
 ```
-[React SPA] → [Express API Server] → [PostgreSQL]
-                       ↓
-             [Redis (Timer/Session Cache)]
+[Next.js App (RSC + Client Components)]
+        ↓   ↓
+[Server Actions / Route Handlers]  →  [Supabase (Auth + Postgres + Storage)]
+                                              ↓
+                                         [Prisma ORM]
 ```
 
 ---
@@ -238,19 +241,18 @@ The schema uses PostgreSQL with UUID primary keys for security and scalability.
 
 ## 8. API Routes
 
-All API endpoints follow RESTful conventions.  
+The backend is implemented using **Next.js Route Handlers** (`app/api/`) for external-facing endpoints and **Server Actions** for all form-based mutations directly in the UI.  
 **Base URL:** `/api/v1`  
-**Auth:** JWT Bearer tokens in the `Authorization` header.
+**Auth:** Managed by Supabase Auth; the Supabase session cookie is validated server-side on every request using `createServerClient`.
 
 ### 8.1 Authentication Endpoints
 
-| Method | Endpoint | Auth | Description |
+| Method | Endpoint / Action | Auth | Description |
 |--------|---------|------|-------------|
-| POST | `/api/v1/auth/admin/login` | None | Admin login → returns JWT access + refresh tokens |
-| POST | `/api/v1/auth/admin/register` | Super Admin | Register a new admin account |
-| POST | `/api/v1/auth/admin/refresh` | Refresh Token | Refresh expired access token |
-| POST | `/api/v1/auth/candidate/login` | None | Candidate login with username + password + exam link |
-| POST | `/api/v1/auth/logout` | Any | Invalidate current session token |
+| Server Action | `signInAdmin()` | None | Admin sign-in via Supabase Auth email/password |
+| Server Action | `signUpAdmin()` | Super Admin | Create a new admin account via Supabase Auth |
+| Server Action | `signInCandidate()` | None | Candidate login — validates credentials in the `candidates` table and creates a scoped Supabase session |
+| Server Action | `signOut()` | Any | Invalidates Supabase session and clears cookies |
 
 ### 8.2 Admin — Exam Management
 
@@ -323,10 +325,11 @@ All API endpoints follow RESTful conventions.
 
 ### 9.1 Authentication & Authorization
 
-- JWT tokens with short expiry (15 min access, 7 day refresh for admins).
-- Candidate tokens are single-use and exam-scoped (valid only for their assigned exam).
-- All passwords hashed with bcrypt (salt rounds: 12).
-- Role-based middleware protects all admin routes.
+- **Supabase Auth** manages admin sessions (email/password with built-in refresh token rotation).
+- Candidate credentials (username + password) are stored in the `candidates` table; login is validated server-side and a custom scoped session is issued.
+- Supabase **Row Level Security (RLS)** policies enforce data access at the database level — admins can only see their own exams; candidates can only see their own attempts.
+- **Next.js Middleware** (`middleware.ts`) uses `createServerClient` to validate the Supabase session on every request and redirects unauthenticated users.
+- Admin routes are protected by checking the user's role stored in Supabase Auth user metadata.
 
 ### 9.2 Exam Integrity
 
@@ -339,7 +342,7 @@ All API endpoints follow RESTful conventions.
 ### 9.3 Data Protection
 
 - HTTPS enforced for all endpoints.
-- Input validation and sanitization on all API routes (using Joi / Zod).
+- Input validation and sanitization on all Server Actions and Route Handlers (using Zod).
 - Rate limiting on auth endpoints (5 attempts per minute per IP).
 - SQL injection prevention via parameterized queries (ORM layer).
 - CORS configured to allow only the frontend domain.
@@ -377,15 +380,13 @@ All API endpoints follow RESTful conventions.
 
 | Variable | Example Value | Description |
 |----------|--------------|-------------|
-| DATABASE_URL | `postgresql://user:pass@host:5432/examdb` | PostgreSQL connection string |
-| REDIS_URL | `redis://localhost:6379` | Redis connection for timer/session cache |
-| JWT_SECRET | `<random-256-bit-key>` | Secret key for signing JWT tokens |
-| JWT_REFRESH_SECRET | `<random-256-bit-key>` | Secret key for refresh tokens |
-| JWT_EXPIRY | `15m` | Access token expiration time |
-| BCRYPT_SALT_ROUNDS | `12` | Bcrypt hashing rounds |
-| FRONTEND_URL | `https://exam.example.com` | CORS allowed origin |
+| DATABASE_URL | `postgresql://...@db.<project>.supabase.co:5432/postgres` | Direct Prisma connection string to Supabase Postgres |
+| DIRECT_URL | `postgresql://...@db.<project>.supabase.co:5432/postgres` | Used by Prisma for migrations (bypasses PgBouncer) |
+| NEXT_PUBLIC_SUPABASE_URL | `https://<project>.supabase.co` | Public Supabase project URL |
+| NEXT_PUBLIC_SUPABASE_ANON_KEY | `<anon-key>` | Public Supabase anon key for client-side auth |
+| SUPABASE_SERVICE_ROLE_KEY | `<service-role-key>` | Secret service key for privileged server-side operations |
+| NEXT_PUBLIC_APP_URL | `https://exam.example.com` | Public app URL used for auth redirects and CORS |
 | SMTP_HOST | `smtp.example.com` | Email server for candidate notifications |
-| S3_BUCKET | `exam-portal-assets` | AWS S3 bucket for file uploads |
 | NODE_ENV | `production` | Runtime environment |
 
 ---

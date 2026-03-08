@@ -3,7 +3,16 @@
     "allow": [
       "Bash(gh:*)",
       "Bash(node:*)",
-      "Bash(claude mcp:*)"
+      "Bash(claude mcp:*)",
+      "Bash(pnpm add:*)",
+      "Bash(pnpm list:*)",
+      "mcp__context7__resolve-library-id",
+      "mcp__context7__query-docs",
+      "Bash(npx prisma:*)",
+      "Bash(npx tsc:*)",
+      "Bash(bash:*)",
+      "Bash(ls:*)",
+      "Bash(find:*)"
     ]
   }
 }

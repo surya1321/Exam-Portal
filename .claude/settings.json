@@ -1,4 +1,9 @@
 {
+  "permissions": {
+    "allow": [
+      "Bash(C:/Users/Meruva Surya Tej/.claude/plugins/cache/claude-plugins-official/ralph-loop/*/scripts/setup-ralph-loop.sh)"
+    ]
+  },
   "enabledPlugins": {
     "superpowers@claude-plugins-official": true
   }
