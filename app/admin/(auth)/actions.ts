@@ -52,12 +52,14 @@ export async function signUpAdmin(formData: {
   }
 
   if (data.user) {
-    await prisma.admin.create({
-      data: {
+    await prisma.admin.upsert({
+      where: { supabaseId: data.user.id },
+      create: {
         supabaseId: data.user.id,
         name: parsed.data.name,
         email: parsed.data.email,
       },
+      update: {},
     });
   }
 
