@@ -5,18 +5,31 @@ const optionSchema = z.object({
   text: z.string().min(1, "Option text is required"),
 });
 
-export const createQuestionSchema = z.object({
+// Base schema without refinement (needed for .partial() on update)
+const baseQuestionSchema = z.object({
   questionText: z.string().min(1, "Question text is required"),
-  questionType: z.enum(["mcq", "true_false", "fill_blank"]),
+  questionType: z.enum(["mcq", "true_false", "fill_blank", "essay"]),
   options: z.array(optionSchema).optional(),
-  correctAnswer: z.string().min(1, "Correct answer is required"),
+  correctAnswer: z.string().optional().default(""),
   marks: z.number().min(0).default(1),
   explanation: z.string().optional(),
   imageUrl: z.string().url().optional(),
   orderIndex: z.number().int().min(0),
 });
 
-export const updateQuestionSchema = createQuestionSchema.partial();
+export const createQuestionSchema = baseQuestionSchema.refine(
+  (data) => {
+    // Essay questions don't need a correct answer
+    if (data.questionType === "essay") return true;
+    return data.correctAnswer && data.correctAnswer.length > 0;
+  },
+  {
+    message: "Correct answer is required",
+    path: ["correctAnswer"],
+  }
+);
+
+export const updateQuestionSchema = baseQuestionSchema.partial();
 
 export const reorderQuestionsSchema = z.object({
   questionIds: z.array(z.string().uuid()),

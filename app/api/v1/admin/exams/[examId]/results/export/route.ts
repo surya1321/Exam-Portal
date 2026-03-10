@@ -24,7 +24,7 @@ export async function GET(
     });
 
     const headers =
-      "Rank,Name,Username,Email,Score,Total Marks,Percentage,Status,Attempt Status,Submitted At\n";
+      "Rank,Name,Email,Score,Total Marks,Percentage,Status,Attempt Status,Submitted At\n";
 
     const rows = attempts
       .map((a, i) => {
@@ -39,7 +39,7 @@ export async function GET(
         // Escape fields that might contain commas or quotes
         const name = `"${a.candidate.fullName.replace(/"/g, '""')}"`;
         const email = `"${(a.candidate.email ?? "").replace(/"/g, '""')}"`;
-        return `${i + 1},${name},"${a.candidate.username}",${email},${score},${totalMarks},${pct}%,${status},${a.status},${submitted}`;
+        return `${i + 1},${name},${email},${score},${totalMarks},${pct}%,${status},${a.status},${submitted}`;
       })
       .join("\n");
 

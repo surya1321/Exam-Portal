@@ -20,9 +20,9 @@ export async function signInCandidate(input: unknown) {
   if (exam.startsAt && now < exam.startsAt) return { error: "Exam has not started yet" };
   if (exam.expiresAt && now > exam.expiresAt) return { error: "Exam has expired" };
 
-  // Find candidate
+  // Find candidate by email
   const candidate = await prisma.candidate.findUnique({
-    where: { examId_username: { examId: exam.id, username: parsed.data.username } },
+    where: { examId_email: { examId: exam.id, email: parsed.data.email } },
   });
   if (!candidate) return { error: "Invalid credentials" };
 

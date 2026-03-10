@@ -19,7 +19,10 @@
       "Bash(cat:*)",
       "Bash(curl:*)",
       "Bash(npx tsx:*)",
-      "Bash(npx next:*)"
+      "Bash(npx next:*)",
+      "Bash(taskkill:*)",
+      "Bash(timeout 90 npx prisma:*)",
+      "Bash(DATABASE_URL=\"postgresql://postgres.fsokgzbpkobftgwajegi:jmGhZM6HHBQXH6ZH@aws-1-ap-south-1.pooler.supabase.com:5432/postgres\" npx prisma:*)"
     ]
   }
 }

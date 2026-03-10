@@ -57,9 +57,8 @@ export function AddCandidateDialog({
     resolver: zodResolver(createCandidateSchema),
     defaultValues: {
       fullName: "",
-      username: "",
+      email: "",
       password: "",
-      email: undefined,
     },
   });
 
@@ -70,7 +69,7 @@ export function AddCandidateDialog({
         toast.error(result.error);
       } else if (result.data) {
         toast.success(
-          `Candidate created — Username: ${result.data.username}, Password: ${result.data.rawPassword}`,
+          `Candidate created — Email: ${result.data.email}, Password: ${result.data.rawPassword}`,
           { duration: 10000 }
         );
         reset();
@@ -107,18 +106,19 @@ export function AddCandidateDialog({
             )}
           </div>
 
-          {/* Username */}
+          {/* Email */}
           <div className="grid gap-2">
-            <Label htmlFor="username">Username</Label>
+            <Label htmlFor="email">Email</Label>
             <Input
-              id="username"
-              placeholder="e.g. john.doe"
-              {...register("username")}
-              aria-invalid={!!errors.username}
+              id="email"
+              type="email"
+              placeholder="e.g. john@example.com"
+              {...register("email")}
+              aria-invalid={!!errors.email}
             />
-            {errors.username && (
+            {errors.email && (
               <p className="text-destructive text-sm">
-                {errors.username.message}
+                {errors.email.message}
               </p>
             )}
           </div>
@@ -147,25 +147,6 @@ export function AddCandidateDialog({
             {errors.password && (
               <p className="text-destructive text-sm">
                 {errors.password.message}
-              </p>
-            )}
-          </div>
-
-          {/* Email */}
-          <div className="grid gap-2">
-            <Label htmlFor="email">
-              Email <span className="text-muted-foreground">(optional)</span>
-            </Label>
-            <Input
-              id="email"
-              type="email"
-              placeholder="e.g. john@example.com"
-              {...register("email")}
-              aria-invalid={!!errors.email}
-            />
-            {errors.email && (
-              <p className="text-destructive text-sm">
-                {errors.email.message}
               </p>
             )}
           </div>

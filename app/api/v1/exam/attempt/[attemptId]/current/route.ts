@@ -32,17 +32,18 @@ export async function GET(
     );
   }
 
-  const next = await getNextQuestion(attemptId);
+  // Fetch questions once and reuse for both getNextQuestion and progress
+  const allQuestions = await getOrderedQuestions(attempt.examId);
+  const next = await getNextQuestion(attemptId, allQuestions);
+
   if (!next) {
-    // All questions answered
     return NextResponse.json({ allAnswered: true });
   }
 
-  const timeRemaining = await getTimeRemaining(attemptId);
-
-  // Get total questions and answered count for progress
-  const allQuestions = await getOrderedQuestions(attempt.examId);
-  const answeredCount = await prisma.response.count({ where: { attemptId } });
+  const [timeRemaining, answeredCount] = await Promise.all([
+    getTimeRemaining(attemptId),
+    prisma.response.count({ where: { attemptId } }),
+  ]);
 
   return NextResponse.json({
     question: {

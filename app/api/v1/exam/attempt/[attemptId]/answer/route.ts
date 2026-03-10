@@ -4,6 +4,7 @@ import {
   isAttemptExpired,
   computeAndSubmitAttempt,
   getNextQuestion,
+  getOrderedQuestions,
 } from "@/lib/exam-engine";
 
 export async function POST(
@@ -57,51 +58,101 @@ export async function POST(
   }
 
   // Compute correctness and marks
-  const isCorrect = selectedAnswer === question.correctAnswer;
+  // Essay questions are not auto-graded; they're stored as pending review
+  const isEssay = question.questionType === "essay";
+  const isCorrect = isEssay ? false : selectedAnswer === question.correctAnswer;
   let marksAwarded = 0;
-  if (isCorrect) {
-    marksAwarded = Number(question.marks);
-  } else {
-    // Check negative marking
-    const exam = await prisma.exam.findUnique({
-      where: { id: attempt.examId },
-    });
-    if (exam?.allowNegativeMarking) {
-      marksAwarded = -Number(exam.negativeMarkValue);
+  if (!isEssay) {
+    if (isCorrect) {
+      marksAwarded = Number(question.marks);
+    } else {
+      const exam = await prisma.exam.findUnique({
+        where: { id: attempt.examId },
+      });
+      if (exam?.allowNegativeMarking) {
+        marksAwarded = -Number(exam.negativeMarkValue);
+      }
     }
   }
 
-  // Check if response already exists (prevent double submission)
-  const existingResponse = await prisma.response.findUnique({
-    where: { attemptId_questionId: { attemptId, questionId } },
-  });
-  if (existingResponse) {
-    return NextResponse.json(
-      { error: "Already answered this question" },
-      { status: 400 }
-    );
+  // Transaction: atomically check + create response + advance cursor
+  try {
+    await prisma.$transaction(async (tx) => {
+      const existingResponse = await tx.response.findUnique({
+        where: { attemptId_questionId: { attemptId, questionId } },
+      });
+      if (existingResponse) {
+        throw new Error("ALREADY_ANSWERED");
+      }
+
+      await tx.response.create({
+        data: {
+          attemptId,
+          questionId,
+          sectionId: question.sectionId,
+          selectedAnswer,
+          isCorrect,
+          marksAwarded,
+        },
+      });
+
+      // Advance cursor inside the transaction
+      const nextQuestion = await getNextQuestion(attemptId);
+      await tx.examAttempt.update({
+        where: { id: attemptId },
+        data: {
+          currentQuestionId: nextQuestion?.id || null,
+        },
+      });
+    });
+  } catch (err: unknown) {
+    if (err instanceof Error && err.message === "ALREADY_ANSWERED") {
+      return NextResponse.json(
+        { error: "Already answered this question" },
+        { status: 400 }
+      );
+    }
+    throw err;
   }
 
-  // Create the response
-  await prisma.response.create({
-    data: {
-      attemptId,
-      questionId,
-      sectionId: question.sectionId,
-      selectedAnswer,
+  // Prefetch: return the next question inline to avoid a separate GET /current call
+  const allQuestions = await getOrderedQuestions(attempt.examId);
+  const nextQ = await getNextQuestion(attemptId, allQuestions);
+  const answeredCount = await prisma.response.count({ where: { attemptId } });
+
+  if (!nextQ) {
+    return NextResponse.json({
+      success: true,
       isCorrect,
-      marksAwarded,
+      allAnswered: true,
+      nextQuestion: null,
+      section: null,
+      progress: {
+        current: answeredCount + 1,
+        total: allQuestions.length,
+      },
+    });
+  }
+
+  return NextResponse.json({
+    success: true,
+    isCorrect,
+    allAnswered: false,
+    nextQuestion: {
+      id: nextQ.id,
+      text: nextQ.questionText,
+      type: nextQ.questionType,
+      options: nextQ.options,
+      marks: Number(nextQ.marks),
+      imageUrl: nextQ.imageUrl,
+    },
+    section: {
+      id: nextQ.sectionId,
+      title: nextQ.sectionTitle,
+    },
+    progress: {
+      current: answeredCount + 1,
+      total: allQuestions.length,
     },
   });
-
-  // Update currentQuestionId to next question
-  const nextQuestion = await getNextQuestion(attemptId);
-  await prisma.examAttempt.update({
-    where: { id: attemptId },
-    data: {
-      currentQuestionId: nextQuestion?.id || null,
-    },
-  });
-
-  return NextResponse.json({ success: true, isCorrect });
 }

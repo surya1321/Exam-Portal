@@ -18,6 +18,7 @@ enum QuestionType {
   mcq
   true_false
   fill_blank
+  essay
 }
 
 enum AttemptStatus {
@@ -108,17 +109,16 @@ model Question {
 model Candidate {
   id           String   @id @default(uuid()) @db.Uuid
   examId       String   @map("exam_id") @db.Uuid
-  username     String   @db.VarChar(100)
   passwordHash String   @map("password_hash") @db.VarChar(255)
   fullName     String   @map("full_name") @db.VarChar(200)
-  email        String?  @db.VarChar(255)
+  email        String   @db.VarChar(255)
   isUsed       Boolean  @default(false) @map("is_used")
   createdAt    DateTime @default(now()) @map("created_at")
 
   exam     Exam          @relation(fields: [examId], references: [id], onDelete: Cascade)
   attempts ExamAttempt[]
 
-  @@unique([examId, username])
+  @@unique([examId, email])
   @@map("candidates")
 }
 

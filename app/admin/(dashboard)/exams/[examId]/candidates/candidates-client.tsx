@@ -38,8 +38,7 @@ import { AddCandidateDialog } from "./add-candidate-dialog";
 export type CandidateItem = {
   id: string;
   fullName: string;
-  username: string;
-  email: string | null;
+  email: string;
   isUsed: boolean;
   createdAt: string;
   attempts: { status: string; totalScore: number }[];
@@ -179,7 +178,6 @@ export function CandidatesClient({
               <TableHeader>
                 <TableRow>
                   <TableHead>Name</TableHead>
-                  <TableHead>Username</TableHead>
                   <TableHead>Email</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Attempt</TableHead>
@@ -192,11 +190,8 @@ export function CandidatesClient({
                     <TableCell className="font-medium">
                       {candidate.fullName}
                     </TableCell>
-                    <TableCell>
-                      <code className="text-sm">{candidate.username}</code>
-                    </TableCell>
                     <TableCell className="text-muted-foreground">
-                      {candidate.email || "—"}
+                      {candidate.email}
                     </TableCell>
                     <TableCell>
                       <Badge

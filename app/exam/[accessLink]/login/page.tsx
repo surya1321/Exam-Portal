@@ -32,7 +32,7 @@ export default function CandidateLoginPage() {
   const form = useForm<CandidateSignInInput>({
     resolver: zodResolver(candidateSignInSchema),
     defaultValues: {
-      username: "",
+      email: "",
       password: "",
       accessLink: params.accessLink ?? "",
     },
@@ -92,15 +92,15 @@ export default function CandidateLoginPage() {
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
               <FormField
                 control={form.control}
-                name="username"
+                name="email"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Username</FormLabel>
+                    <FormLabel>Email</FormLabel>
                     <FormControl>
                       <Input
-                        type="text"
-                        placeholder="Enter your username"
-                        autoComplete="username"
+                        type="email"
+                        placeholder="Enter your email"
+                        autoComplete="email"
                         {...field}
                       />
                     </FormControl>

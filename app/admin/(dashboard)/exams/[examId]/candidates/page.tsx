@@ -44,7 +44,6 @@ export default async function CandidatesPage({ params }: CandidatesPageProps) {
   const candidatesData = candidates.map((c) => ({
     id: c.id,
     fullName: c.fullName,
-    username: c.username,
     email: c.email,
     isUsed: c.isUsed,
     createdAt: c.createdAt.toISOString(),

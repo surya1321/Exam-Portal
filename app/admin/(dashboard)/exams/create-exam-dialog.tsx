@@ -1,6 +1,7 @@
 "use client";
 
 import { useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
@@ -32,6 +33,7 @@ interface CreateExamDialogProps {
 
 export function CreateExamDialog({ open, onOpenChange }: CreateExamDialogProps) {
   const [isPending, startTransition] = useTransition();
+  const router = useRouter();
 
   const {
     register,
@@ -65,6 +67,9 @@ export function CreateExamDialog({ open, onOpenChange }: CreateExamDialogProps) 
         toast.success("Exam created successfully");
         reset();
         onOpenChange(false);
+        if (result.data?.id) {
+          router.push(`/admin/exams/${result.data.id}`);
+        }
       }
     });
   }

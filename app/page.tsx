@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import Link from "next/link";
-import { ShieldCheck, ArrowRight, ClipboardList } from "lucide-react";
+import { ArrowRight, ClipboardList } from "lucide-react";
+import Image from "next/image";
 
 export default function Home() {
   const [accessLink, setAccessLink] = useState("");
@@ -26,10 +27,8 @@ export default function Home() {
       <header className="border-b bg-card/80 backdrop-blur-sm sticky top-0 z-10">
         <div className="max-w-6xl mx-auto flex items-center justify-between px-6 h-14">
           <div className="flex items-center gap-2.5">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
-              <ShieldCheck className="h-4.5 w-4.5 text-primary" />
-            </div>
-            <span className="font-semibold tracking-tight">Exam Portal</span>
+            <Image src="/favicon.ico" alt="GCIA logo" width={32} height={32} className="rounded-lg" />
+            <span className="font-semibold tracking-tight">GCIA Assessment Platform</span>
           </div>
           <Button variant="ghost" size="sm" asChild>
             <Link href="/admin/dashboard">Admin</Link>
@@ -58,23 +57,6 @@ export default function Home() {
 
             {/* Right: Action cards */}
             <div className="space-y-4">
-              {/* Admin Dashboard */}
-              <Link
-                href="/admin/dashboard"
-                className="group flex items-center gap-4 rounded-xl border bg-card p-5 transition-all hover:shadow-md hover:border-primary/30"
-              >
-                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-                  <ShieldCheck className="h-5 w-5 text-primary" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <h2 className="font-semibold">Admin Dashboard</h2>
-                  <p className="text-sm text-muted-foreground mt-0.5">
-                    Manage exams, candidates, and results
-                  </p>
-                </div>
-                <ArrowRight className="h-4 w-4 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
-              </Link>
-
               {/* Take an Exam */}
               <div className="rounded-xl border bg-card p-5 space-y-4">
                 <div className="flex items-center gap-4">

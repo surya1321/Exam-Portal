@@ -135,7 +135,7 @@ export default async function AttemptDetailPage({
           <CardTitle className="text-base">Candidate Information</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid gap-4 sm:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-2">
             <div className="flex items-center gap-3">
               <User className="text-muted-foreground h-4 w-4 shrink-0" />
               <div>
@@ -146,20 +146,11 @@ export default async function AttemptDetailPage({
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <Hash className="text-muted-foreground h-4 w-4 shrink-0" />
-              <div>
-                <p className="text-muted-foreground text-xs">Username</p>
-                <p className="text-sm font-medium">
-                  <code>{attempt.candidate.username}</code>
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
               <Mail className="text-muted-foreground h-4 w-4 shrink-0" />
               <div>
                 <p className="text-muted-foreground text-xs">Email</p>
                 <p className="text-sm font-medium">
-                  {attempt.candidate.email || "---"}
+                  {attempt.candidate.email}
                 </p>
               </div>
             </div>
@@ -177,19 +168,17 @@ export default async function AttemptDetailPage({
             {/* Score Circle */}
             <div className="flex flex-col items-center gap-2">
               <div
-                className={`flex items-center justify-center w-28 h-28 rounded-full border-4 ${
-                  passed
+                className={`flex items-center justify-center w-28 h-28 rounded-full border-4 ${passed
                     ? "border-emerald-500 bg-emerald-50 dark:bg-emerald-950/30"
                     : "border-red-500 bg-red-50 dark:bg-red-950/30"
-                }`}
+                  }`}
               >
                 <div className="text-center">
                   <div
-                    className={`text-2xl font-bold ${
-                      passed
+                    className={`text-2xl font-bold ${passed
                         ? "text-emerald-700 dark:text-emerald-400"
                         : "text-red-700 dark:text-red-400"
-                    }`}
+                      }`}
                   >
                     {totalScore}
                   </div>
@@ -204,11 +193,10 @@ export default async function AttemptDetailPage({
             <div className="flex-1 text-center sm:text-left space-y-3">
               <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
                 <span
-                  className={`text-3xl font-bold ${
-                    passed
+                  className={`text-3xl font-bold ${passed
                       ? "text-emerald-700 dark:text-emerald-400"
                       : "text-red-700 dark:text-red-400"
-                  }`}
+                    }`}
                 >
                   {percentage.toFixed(1)}%
                 </span>

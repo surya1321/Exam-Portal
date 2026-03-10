@@ -25,8 +25,7 @@ export type AttemptRow = {
   id: string;
   candidateId: string;
   candidateName: string;
-  candidateUsername: string;
-  candidateEmail: string | null;
+  candidateEmail: string;
   totalScore: number;
   totalCorrect: number;
   totalWrong: number;
@@ -39,7 +38,6 @@ export type AttemptRow = {
 type SortKey =
   | "rank"
   | "candidateName"
-  | "candidateUsername"
   | "totalScore"
   | "percentage"
   | "submittedAt";
@@ -67,7 +65,7 @@ export function ResultsTable({
       setSortDir((prev) => (prev === "asc" ? "desc" : "asc"));
     } else {
       setSortKey(key);
-      setSortDir(key === "candidateName" || key === "candidateUsername" ? "asc" : "desc");
+      setSortDir(key === "candidateName" ? "asc" : "desc");
     }
   }
 
@@ -83,9 +81,6 @@ export function ResultsTable({
           break;
         case "candidateName":
           cmp = a.candidateName.localeCompare(b.candidateName);
-          break;
-        case "candidateUsername":
-          cmp = a.candidateUsername.localeCompare(b.candidateUsername);
           break;
         case "submittedAt": {
           const aTime = a.submittedAt
@@ -174,9 +169,6 @@ export function ResultsTable({
                 <SortButton label="Candidate" field="candidateName" />
               </TableHead>
               <TableHead>
-                <SortButton label="Username" field="candidateUsername" />
-              </TableHead>
-              <TableHead>
                 <SortButton label="Score" field="totalScore" />
               </TableHead>
               <TableHead>
@@ -204,11 +196,11 @@ export function ResultsTable({
                   <TableCell className="font-medium text-muted-foreground">
                     {rank}
                   </TableCell>
-                  <TableCell className="font-medium">
-                    {attempt.candidateName}
-                  </TableCell>
                   <TableCell>
-                    <code className="text-sm">{attempt.candidateUsername}</code>
+                    <div>
+                      <p className="font-medium">{attempt.candidateName}</p>
+                      <p className="text-xs text-muted-foreground">{attempt.candidateEmail}</p>
+                    </div>
                   </TableCell>
                   <TableCell>
                     {attempt.totalScore} / {totalMarks}
@@ -248,15 +240,15 @@ export function ResultsTable({
                   <TableCell className="text-muted-foreground text-sm">
                     {attempt.submittedAt
                       ? new Date(attempt.submittedAt).toLocaleDateString(
-                          undefined,
-                          {
-                            year: "numeric",
-                            month: "short",
-                            day: "numeric",
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          }
-                        )
+                        undefined,
+                        {
+                          year: "numeric",
+                          month: "short",
+                          day: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        }
+                      )
                       : "---"}
                   </TableCell>
                   <TableCell className="text-right">

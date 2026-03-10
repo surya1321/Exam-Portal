@@ -29,7 +29,6 @@ export async function createCandidate(examId: string, input: unknown) {
     const candidate = await prisma.candidate.create({
       data: {
         examId,
-        username: parsed.data.username,
         passwordHash,
         fullName: parsed.data.fullName,
         email: parsed.data.email,
@@ -40,14 +39,14 @@ export async function createCandidate(examId: string, input: unknown) {
     return {
       data: {
         id: candidate.id,
-        username: candidate.username,
+        email: candidate.email,
         rawPassword: parsed.data.password,
       },
     };
   } catch (e: unknown) {
     if (e instanceof Error && e.message.includes("Unique constraint")) {
       return {
-        error: "A candidate with this username already exists for this exam",
+        error: "A candidate with this email already exists for this exam",
       };
     }
     return { error: "Failed to create candidate" };
@@ -59,7 +58,7 @@ export async function bulkCreateCandidates(examId: string, input: unknown) {
   const parsed = bulkCreateCandidatesSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.issues[0].message };
 
-  const results: { username: string; password: string; fullName: string }[] =
+  const results: { email: string; password: string; fullName: string }[] =
     [];
 
   for (const candidate of parsed.data.candidates) {
@@ -68,14 +67,13 @@ export async function bulkCreateCandidates(examId: string, input: unknown) {
       await prisma.candidate.create({
         data: {
           examId,
-          username: candidate.username,
           passwordHash,
           fullName: candidate.fullName,
           email: candidate.email,
         },
       });
       results.push({
-        username: candidate.username,
+        email: candidate.email,
         password: candidate.password,
         fullName: candidate.fullName,
       });

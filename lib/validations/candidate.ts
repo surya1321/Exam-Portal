@@ -1,10 +1,9 @@
 import { z } from "zod";
 
 export const createCandidateSchema = z.object({
-  username: z.string().min(1, "Username is required").max(100),
   password: z.string().min(6, "Password must be at least 6 characters"),
   fullName: z.string().min(1, "Full name is required").max(200),
-  email: z.string().email().optional(),
+  email: z.string().email("Valid email is required"),
 });
 
 export const bulkCreateCandidatesSchema = z.object({

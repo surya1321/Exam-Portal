@@ -16,6 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 
 import { SectionManager } from "./sections/section-manager";
+import { PublishButton } from "./publish-button";
 
 type ExamDetailPageProps = {
   params: Promise<{ examId: string }>;
@@ -50,7 +51,7 @@ export default async function ExamDetailPage({ params }: ExamDetailPageProps) {
     questions: section.questions.map((q) => ({
       id: q.id,
       questionText: q.questionText,
-      questionType: q.questionType as "mcq" | "true_false" | "fill_blank",
+      questionType: q.questionType as "mcq" | "true_false" | "fill_blank" | "essay",
       options: q.options as { id: string; text: string }[] | null,
       correctAnswer: q.correctAnswer,
       marks: Number(q.marks),
@@ -105,6 +106,7 @@ export default async function ExamDetailPage({ params }: ExamDetailPageProps) {
             </p>
           )}
         </div>
+        <PublishButton examId={examId} isPublished={exam.isPublished} />
       </div>
 
       {/* Sub-navigation */}

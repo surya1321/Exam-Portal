@@ -1,4 +1,10 @@
 import { prisma } from "@/lib/prisma";
+import type { Question, Section } from "./generated/prisma/client";
+
+export type OrderedQuestion = Question & {
+  sectionId: string;
+  sectionTitle: string;
+};
 
 export async function getTimeRemaining(attemptId: string): Promise<number> {
   const attempt = await prisma.examAttempt.findUnique({
@@ -35,7 +41,10 @@ export async function getOrderedQuestions(examId: string) {
   );
 }
 
-export async function getNextQuestion(attemptId: string) {
+export async function getNextQuestion(
+  attemptId: string,
+  preloadedQuestions?: OrderedQuestion[]
+) {
   const attempt = await prisma.examAttempt.findUnique({
     where: { id: attemptId },
     include: {
@@ -45,7 +54,8 @@ export async function getNextQuestion(attemptId: string) {
   });
   if (!attempt) return null;
 
-  const allQuestions = await getOrderedQuestions(attempt.examId);
+  const allQuestions =
+    preloadedQuestions ?? (await getOrderedQuestions(attempt.examId));
   const answeredIds = new Set(attempt.responses.map((r) => r.questionId));
 
   for (const question of allQuestions) {
@@ -60,7 +70,9 @@ export async function computeAndSubmitAttempt(attemptId: string) {
   const attempt = await prisma.examAttempt.findUnique({
     where: { id: attemptId },
     include: {
-      responses: true,
+      responses: {
+        include: { question: { select: { questionType: true } } },
+      },
       exam: {
         include: {
           sections: {
@@ -72,25 +84,32 @@ export async function computeAndSubmitAttempt(attemptId: string) {
   });
   if (!attempt) return null;
 
-  const totalQuestions = attempt.exam.sections.reduce(
-    (sum, s) => sum + s.questions.length,
-    0
+  // Separate essay questions from auto-gradable ones
+  const allQuestions = attempt.exam.sections.flatMap((s) => s.questions);
+  const gradableQuestions = allQuestions.filter(
+    (q) => q.questionType !== "essay"
   );
 
-  const totalCorrect = attempt.responses.filter((r) => r.isCorrect).length;
-  const totalWrong = attempt.responses.filter(
+  const gradableResponses = attempt.responses.filter(
+    (r) => r.question.questionType !== "essay"
+  );
+
+  const totalCorrect = gradableResponses.filter((r) => r.isCorrect).length;
+  const totalWrong = gradableResponses.filter(
     (r) => !r.isCorrect && r.selectedAnswer
   ).length;
-  const totalUnanswered = totalQuestions - attempt.responses.length;
-  const totalScore = attempt.responses.reduce(
+  const totalUnanswered =
+    gradableQuestions.length - gradableResponses.length;
+  const totalScore = gradableResponses.reduce(
     (sum, r) => sum + Number(r.marksAwarded),
     0
   );
 
   const timeRemaining = await getTimeRemaining(attemptId);
 
-  const updated = await prisma.examAttempt.update({
-    where: { id: attemptId },
+  // Atomic status transition: only update if still "in_progress"
+  const { count } = await prisma.examAttempt.updateMany({
+    where: { id: attemptId, status: "in_progress" },
     data: {
       status: timeRemaining <= 0 ? "timed_out" : "completed",
       submittedAt: new Date(),
@@ -102,5 +121,9 @@ export async function computeAndSubmitAttempt(attemptId: string) {
     },
   });
 
-  return updated;
+  // Already submitted by another request
+  if (count === 0) return null;
+
+  return prisma.examAttempt.findUnique({ where: { id: attemptId } });
 }
+

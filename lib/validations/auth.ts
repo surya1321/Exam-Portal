@@ -12,7 +12,7 @@ export const adminSignUpSchema = z.object({
 });
 
 export const candidateSignInSchema = z.object({
-  username: z.string().min(1, "Username is required"),
+  email: z.string().email("Please enter a valid email address"),
   password: z.string().min(1, "Password is required"),
   accessLink: z.string().min(1, "Exam access link is required"),
 });

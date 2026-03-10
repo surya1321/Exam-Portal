@@ -37,7 +37,7 @@ type QuestionFormValues = z.input<typeof createQuestionSchema>;
 export type QuestionData = {
   id: string;
   questionText: string;
-  questionType: "mcq" | "true_false" | "fill_blank";
+  questionType: "mcq" | "true_false" | "fill_blank" | "essay";
   options: { id: string; text: string }[] | null;
   correctAnswer: string;
   marks: number;
@@ -85,23 +85,23 @@ export function QuestionForm({
     resolver: zodResolver(createQuestionSchema),
     defaultValues: question
       ? {
-          questionText: question.questionText,
-          questionType: question.questionType,
-          options: question.options ?? defaultOptions,
-          correctAnswer: question.correctAnswer,
-          marks: question.marks,
-          explanation: question.explanation ?? "",
-          orderIndex: question.orderIndex,
-        }
+        questionText: question.questionText,
+        questionType: question.questionType,
+        options: question.options ?? defaultOptions,
+        correctAnswer: question.correctAnswer,
+        marks: question.marks,
+        explanation: question.explanation ?? "",
+        orderIndex: question.orderIndex,
+      }
       : {
-          questionText: "",
-          questionType: "mcq",
-          options: defaultOptions,
-          correctAnswer: "",
-          marks: 1,
-          explanation: "",
-          orderIndex: nextOrderIndex,
-        },
+        questionText: "",
+        questionType: "mcq",
+        options: defaultOptions,
+        correctAnswer: "",
+        marks: 1,
+        explanation: "",
+        orderIndex: nextOrderIndex,
+      },
   });
 
   const { fields } = useFieldArray({
@@ -121,8 +121,9 @@ export function QuestionForm({
       cleanedData.options = undefined;
     }
 
-    if (data.questionType === "true_false") {
-      // correctAnswer should be "True" or "False"
+    if (data.questionType === "essay") {
+      // Essay questions don't need a correct answer - store guidance as reference
+      cleanedData.correctAnswer = cleanedData.correctAnswer || "";
     }
 
     startTransition(async () => {
@@ -148,7 +149,7 @@ export function QuestionForm({
   }
 
   function handleTypeChange(value: string) {
-    const newType = value as "mcq" | "true_false" | "fill_blank";
+    const newType = value as "mcq" | "true_false" | "fill_blank" | "essay";
     setValue("questionType", newType);
     setValue("correctAnswer", "");
 
@@ -188,6 +189,7 @@ export function QuestionForm({
                 <SelectItem value="mcq">Multiple Choice (MCQ)</SelectItem>
                 <SelectItem value="true_false">True / False</SelectItem>
                 <SelectItem value="fill_blank">Fill in the Blank</SelectItem>
+                <SelectItem value="essay">Essay</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -309,6 +311,33 @@ export function QuestionForm({
                   {errors.correctAnswer.message}
                 </p>
               )}
+            </div>
+          )}
+
+          {questionType === "essay" && (
+            <div className="rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50/50 dark:bg-blue-950/20 p-4">
+              <p className="text-sm text-blue-700 dark:text-blue-400 font-medium mb-1">
+                📝 Essay Question
+              </p>
+              <p className="text-sm text-muted-foreground">
+                Candidates will see a text area to write their essay. This
+                question type is graded manually and excluded from automatic
+                pass/fail calculation.
+              </p>
+              <div className="grid gap-2 mt-3">
+                <Label htmlFor="correctAnswer">
+                  Grading Guidance{" "}
+                  <span className="text-muted-foreground font-normal">
+                    (optional — for admin reference)
+                  </span>
+                </Label>
+                <Textarea
+                  id="correctAnswer"
+                  placeholder="E.g. key points to look for, rubric, expected length..."
+                  rows={2}
+                  {...register("correctAnswer")}
+                />
+              </div>
             </div>
           )}
 

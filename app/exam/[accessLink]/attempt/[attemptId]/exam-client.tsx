@@ -21,7 +21,7 @@ import {
 type Question = {
   id: string;
   text: string;
-  type: "mcq" | "true_false" | "fill_blank";
+  type: "mcq" | "true_false" | "fill_blank" | "essay";
   options: { id: string; text: string }[] | null;
   marks: number;
   imageUrl?: string | null;
@@ -66,6 +66,29 @@ export function ExamClient({
   const [submitting, setSubmitting] = useState(false);
   const [allAnswered, setAllAnswered] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Apply prefetched question data from an API response
+  function applyPrefetchedData(data: {
+    allAnswered: boolean;
+    nextQuestion: Question | null;
+    section: Section | null;
+    progress: Progress;
+  }) {
+    if (data.allAnswered) {
+      setAllAnswered(true);
+      setQuestion(null);
+      setLoading(false);
+      return;
+    }
+    if (data.nextQuestion) {
+      setQuestion(data.nextQuestion);
+      setSection(data.section);
+      setProgress(data.progress);
+      setSelectedAnswer(null);
+      setAllAnswered(false);
+      setLoading(false);
+    }
+  }
 
   // Fetch current question
   const fetchCurrentQuestion = useCallback(async () => {
@@ -127,6 +150,7 @@ export function ExamClient({
   async function handleNext() {
     if (!question || !selectedAnswer) return;
     setSubmitting(true);
+    setError(null);
     try {
       const res = await fetch(`/api/v1/exam/attempt/${attemptId}/answer`, {
         method: "POST",
@@ -148,7 +172,8 @@ export function ExamClient({
         return;
       }
 
-      await fetchCurrentQuestion();
+      const data = await res.json();
+      applyPrefetchedData(data);
     } catch {
       setError("Network error. Please try again.");
     } finally {
@@ -160,6 +185,7 @@ export function ExamClient({
   async function handleSkip() {
     if (!question) return;
     setSubmitting(true);
+    setError(null);
     try {
       const res = await fetch(`/api/v1/exam/attempt/${attemptId}/skip`, {
         method: "POST",
@@ -178,7 +204,8 @@ export function ExamClient({
         return;
       }
 
-      await fetchCurrentQuestion();
+      const data = await res.json();
+      applyPrefetchedData(data);
     } catch {
       setError("Network error. Please try again.");
     } finally {

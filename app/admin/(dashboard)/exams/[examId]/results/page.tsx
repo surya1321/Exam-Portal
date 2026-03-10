@@ -35,7 +35,7 @@ export default async function ResultsPage({ params }: ResultsPageProps) {
     where: { examId },
     include: {
       candidate: {
-        select: { fullName: true, username: true, email: true },
+        select: { fullName: true, email: true },
       },
     },
     orderBy: { totalScore: "desc" },
@@ -48,7 +48,6 @@ export default async function ResultsPage({ params }: ResultsPageProps) {
     id: attempt.id,
     candidateId: attempt.candidateId,
     candidateName: attempt.candidate.fullName,
-    candidateUsername: attempt.candidate.username,
     candidateEmail: attempt.candidate.email,
     totalScore: Number(attempt.totalScore),
     totalCorrect: attempt.totalCorrect,
@@ -67,8 +66,8 @@ export default async function ResultsPage({ params }: ResultsPageProps) {
   const passCount =
     totalMarks > 0
       ? attemptsData.filter(
-          (a) => (a.totalScore / totalMarks) * 100 >= passingPercentage
-        ).length
+        (a) => (a.totalScore / totalMarks) * 100 >= passingPercentage
+      ).length
       : 0;
   const passRate = totalAttempts > 0 ? (passCount / totalAttempts) * 100 : 0;
 
