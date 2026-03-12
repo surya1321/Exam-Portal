@@ -143,53 +143,58 @@ export function ExamListClient({ exams }: ExamListClientProps) {
         /* Exam cards grid */
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
           {exams.map((exam) => (
-            <Card key={exam.id} className="relative">
-              <CardHeader>
-                <CardTitle className="pr-16">{exam.title}</CardTitle>
-                <CardAction>
-                  <Badge
-                    variant={exam.isPublished ? "default" : "secondary"}
-                    className={
-                      exam.isPublished
-                        ? "bg-green-600 text-white hover:bg-green-600/90"
-                        : ""
-                    }
-                  >
-                    {exam.isPublished ? "Published" : "Draft"}
-                  </Badge>
-                </CardAction>
-                {exam.description && (
-                  <CardDescription className="line-clamp-2">
-                    {exam.description}
-                  </CardDescription>
-                )}
-              </CardHeader>
+            <Link key={exam.id} href={`/admin/exams/${exam.id}`}>
+              <Card className="relative cursor-pointer transition-shadow hover:shadow-md">
+                <CardHeader>
+                  <CardTitle className="pr-16">{exam.title}</CardTitle>
+                  <CardAction>
+                    <Badge
+                      variant={exam.isPublished ? "default" : "secondary"}
+                      className={
+                        exam.isPublished
+                          ? "bg-green-600 text-white hover:bg-green-600/90"
+                          : ""
+                      }
+                    >
+                      {exam.isPublished ? "Published" : "Draft"}
+                    </Badge>
+                  </CardAction>
+                  {exam.description && (
+                    <CardDescription className="line-clamp-2">
+                      {exam.description}
+                    </CardDescription>
+                  )}
+                </CardHeader>
 
-              <CardContent>
-                <div className="text-muted-foreground flex items-center gap-4 text-sm">
-                  <span className="flex items-center gap-1">
-                    <Clock className="h-3.5 w-3.5" />
-                    {exam.durationMinutes} min
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <HelpCircle className="h-3.5 w-3.5" />
-                    {exam.totalQuestions} questions
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <Users className="h-3.5 w-3.5" />
-                    {exam.candidatesCount} candidates
-                  </span>
-                </div>
-              </CardContent>
+                <CardContent>
+                  <div className="text-muted-foreground flex items-center gap-4 text-sm">
+                    <span className="flex items-center gap-1">
+                      <Clock className="h-3.5 w-3.5" />
+                      {exam.durationMinutes} min
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <HelpCircle className="h-3.5 w-3.5" />
+                      {exam.totalQuestions} questions
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <Users className="h-3.5 w-3.5" />
+                      {exam.candidatesCount} candidates
+                    </span>
+                  </div>
+                </CardContent>
 
-              <CardFooter className="justify-end">
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon-sm">
-                      <MoreVertical className="h-4 w-4" />
-                      <span className="sr-only">Actions</span>
-                    </Button>
-                  </DropdownMenuTrigger>
+                <CardFooter className="justify-end">
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        onClick={(e) => e.preventDefault()}
+                      >
+                        <MoreVertical className="h-4 w-4" />
+                        <span className="sr-only">Actions</span>
+                      </Button>
+                    </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
                     <DropdownMenuItem asChild>
                       <Link href={`/admin/exams/${exam.id}`}>
@@ -238,6 +243,7 @@ export function ExamListClient({ exams }: ExamListClientProps) {
                 </DropdownMenu>
               </CardFooter>
             </Card>
+            </Link>
           ))}
         </div>
       )}

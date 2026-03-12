@@ -60,7 +60,12 @@ export async function deleteExam(examId: string) {
   });
   if (!exam) return { error: "Exam not found" };
 
-  await prisma.exam.delete({ where: { id: examId } });
+  await prisma.$transaction(async (tx) => {
+    // Responses cascade-delete when their parent ExamAttempt is deleted (onDelete: Cascade in schema)
+    // So we only need to delete ExamAttempts, then the exam itself
+    await tx.examAttempt.deleteMany({ where: { examId } });
+    await tx.exam.delete({ where: { id: examId } });
+  });
 
   revalidatePath("/admin/exams");
   return { success: true };

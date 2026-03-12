@@ -1,12 +1,20 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Users, TrendingUp, Percent } from "lucide-react";
+import { ArrowLeft, Users, TrendingUp, Percent, LayoutList } from "lucide-react";
 
 import { requireAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 
 import { ResultsTable } from "./results-table";
 
@@ -41,6 +49,23 @@ export default async function ResultsPage({ params }: ResultsPageProps) {
     orderBy: { totalScore: "desc" },
   });
 
+  // Fetch sections with questions for per-section max marks
+  const sections = await prisma.section.findMany({
+    where: { examId },
+    include: {
+      questions: { select: { id: true, marks: true } },
+    },
+    orderBy: { orderIndex: "asc" },
+  });
+
+  // Aggregate response marks per section across ALL attempts for this exam
+  const sectionResponses = await prisma.response.groupBy({
+    by: ["sectionId"],
+    where: { attempt: { examId } },
+    _sum: { marksAwarded: true },
+    _count: { id: true },
+  });
+
   const totalMarks = exam.totalMarks;
   const passingPercentage = Number(exam.passingPercentage);
 
@@ -70,6 +95,25 @@ export default async function ResultsPage({ params }: ResultsPageProps) {
       ).length
       : 0;
   const passRate = totalAttempts > 0 ? (passCount / totalAttempts) * 100 : 0;
+
+  // Compute per-section performance
+  const sectionPerfMap = new Map(sectionResponses.map((r) => [r.sectionId, r]));
+  const sectionPerf = sections.map((sec) => {
+    const maxMarks = sec.questions.reduce((s, q) => s + Number(q.marks), 0);
+    const agg = sectionPerfMap.get(sec.id);
+    const totalEarned = Number(agg?._sum.marksAwarded ?? 0);
+    // Average per attempt (divide by number of attempts)
+    const avgEarned = totalAttempts > 0 ? totalEarned / totalAttempts : 0;
+    const avgPct = maxMarks > 0 ? (avgEarned / maxMarks) * 100 : 0;
+    return {
+      id: sec.id,
+      title: sec.title,
+      questions: sec.questions.length,
+      maxMarks,
+      avgEarned: Math.round(avgEarned * 10) / 10,
+      avgPct: Math.round(avgPct * 10) / 10,
+    };
+  });
 
   const stats = [
     { label: "Total Attempts", value: String(totalAttempts), icon: Users, color: "text-primary" },
@@ -146,6 +190,50 @@ export default async function ResultsPage({ params }: ResultsPageProps) {
           </Card>
         ))}
       </div>
+
+      {/* Section Performance Summary */}
+      {sectionPerf.length > 0 && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              <LayoutList className="h-4 w-4 text-muted-foreground" />
+              Section Performance
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Section</TableHead>
+                  <TableHead className="text-center">Questions</TableHead>
+                  <TableHead className="text-right">Max Marks</TableHead>
+                  <TableHead className="text-right">Avg Score</TableHead>
+                  <TableHead className="text-right">Avg %</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {sectionPerf.map((sec) => (
+                  <TableRow key={sec.id}>
+                    <TableCell className="font-medium">{sec.title}</TableCell>
+                    <TableCell className="text-center text-muted-foreground">{sec.questions}</TableCell>
+                    <TableCell className="text-right text-muted-foreground">{sec.maxMarks}</TableCell>
+                    <TableCell className="text-right font-medium">
+                      {totalAttempts > 0 ? sec.avgEarned : "—"}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {totalAttempts > 0 ? (
+                        <span className={sec.avgPct >= passingPercentage ? "text-emerald-600 dark:text-emerald-400 font-medium" : "text-red-500 dark:text-red-400 font-medium"}>
+                          {sec.avgPct}%
+                        </span>
+                      ) : "—"}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Results table */}
       <ResultsTable

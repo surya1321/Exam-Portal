@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { ArrowUpDown, Download, Eye, Users } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -57,6 +58,7 @@ export function ResultsTable({
   passingPercentage,
   attempts,
 }: ResultsTableProps) {
+  const router = useRouter();
   const [sortKey, setSortKey] = useState<SortKey>("totalScore");
   const [sortDir, setSortDir] = useState<SortDirection>("desc");
 
@@ -192,7 +194,13 @@ export function ResultsTable({
               const rank = ranked.get(attempt.id) ?? 0;
 
               return (
-                <TableRow key={attempt.id}>
+                <TableRow
+                  key={attempt.id}
+                  className="cursor-pointer hover:bg-muted/60"
+                  onClick={() =>
+                    router.push(`/admin/exams/${examId}/results/${attempt.id}`)
+                  }
+                >
                   <TableCell className="font-medium text-muted-foreground">
                     {rank}
                   </TableCell>
@@ -252,7 +260,12 @@ export function ResultsTable({
                       : "---"}
                   </TableCell>
                   <TableCell className="text-right">
-                    <Button variant="ghost" size="icon-sm" asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      onClick={(e) => e.stopPropagation()}
+                      asChild
+                    >
                       <Link
                         href={`/admin/exams/${examId}/results/${attempt.id}`}
                         title="View detail"

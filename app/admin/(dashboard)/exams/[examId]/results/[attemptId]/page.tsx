@@ -7,8 +7,6 @@ import {
   MinusCircle,
   Trophy,
   Clock,
-  Target,
-  Hash,
   Mail,
   User,
 } from "lucide-react";
@@ -23,15 +21,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+
+import { SectionBreakdown, type SectionRow } from "./section-breakdown";
 
 type Option = { id: string; text: string };
 
@@ -67,7 +58,7 @@ export default async function AttemptDetailPage({
       responses: {
         include: {
           question: true,
-          section: { select: { title: true } },
+          section: { select: { id: true, title: true } },
         },
         orderBy: { answeredAt: "asc" },
       },
@@ -76,7 +67,7 @@ export default async function AttemptDetailPage({
 
   if (!attempt || attempt.examId !== examId) notFound();
 
-  // Compute score and pass/fail
+  // Compute overall score and pass/fail
   const totalScore = Number(attempt.totalScore);
   const totalMarks = attempt.exam.totalMarks;
   const passingPercentage = Number(attempt.exam.passingPercentage);
@@ -85,35 +76,43 @@ export default async function AttemptDetailPage({
 
   const { totalCorrect, totalWrong, totalUnanswered } = attempt;
 
-  // Helper to get display text for a selected answer
-  function getAnswerDisplayText(
-    selectedAnswer: string | null,
-    options: Option[] | null
-  ): string {
-    if (!selectedAnswer) return "Not answered";
-    if (!options || options.length === 0) return selectedAnswer;
-    const option = options.find((o) => o.id === selectedAnswer);
-    return option ? option.text : selectedAnswer;
-  }
+  // Build section rows for SectionBreakdown component
+  const sectionMap = new Map<string, SectionRow>();
+  for (const r of attempt.responses) {
+    const key = r.section.id;
+    if (!sectionMap.has(key)) {
+      sectionMap.set(key, {
+        id: key,
+        title: r.section.title,
+        correct: 0,
+        wrong: 0,
+        unanswered: 0,
+        scoreEarned: 0,
+        scoreMax: 0,
+        questions: [],
+      });
+    }
+    const sec = sectionMap.get(key)!;
+    sec.scoreMax += Number(r.question.marks);
+    sec.scoreEarned += Number(r.marksAwarded);
+    if (!r.selectedAnswer) sec.unanswered++;
+    else if (r.isCorrect) sec.correct++;
+    else sec.wrong++;
 
-  // Helper to get display text for the correct answer
-  function getCorrectAnswerDisplayText(
-    correctAnswer: string,
-    options: Option[] | null
-  ): string {
-    if (!options || options.length === 0) return correctAnswer;
-    const option = options.find((o) => o.id === correctAnswer);
-    return option ? option.text : correctAnswer;
+    sec.questions.push({
+      id: r.id,
+      questionText: r.question.questionText,
+      questionType: r.question.questionType,
+      options: r.question.options as Option[] | null,
+      correctAnswer: r.question.correctAnswer,
+      marks: Number(r.question.marks),
+      selectedAnswer: r.selectedAnswer,
+      isCorrect: r.isCorrect,
+      marksAwarded: Number(r.marksAwarded),
+      timeSpentSec: r.timeSpentSec,
+    });
   }
-
-  // Format time spent
-  function formatTimeSpent(seconds: number | null): string {
-    if (seconds === null || seconds === undefined) return "---";
-    if (seconds < 60) return `${seconds}s`;
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}m ${secs}s`;
-  }
+  const sectionRows = Array.from(sectionMap.values());
 
   return (
     <div className="p-6 lg:p-8">
@@ -227,154 +226,39 @@ export default async function AttemptDetailPage({
                     ? "Completed"
                     : attempt.status}
               </Badge>
+
+              {/* Inline stats strip */}
+              <div className="mt-2 flex flex-wrap items-center gap-x-5 gap-y-2 border-t pt-3">
+                <span className="flex items-center gap-1.5 text-sm">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                  <span className="font-semibold text-emerald-600 dark:text-emerald-400">{totalCorrect}</span>
+                  <span className="text-muted-foreground text-xs">Correct</span>
+                </span>
+                <span className="flex items-center gap-1.5 text-sm">
+                  <XCircle className="h-4 w-4 text-red-500" />
+                  <span className="font-semibold text-red-600 dark:text-red-400">{totalWrong}</span>
+                  <span className="text-muted-foreground text-xs">Wrong</span>
+                </span>
+                <span className="flex items-center gap-1.5 text-sm">
+                  <MinusCircle className="h-4 w-4 text-slate-400" />
+                  <span className="font-semibold text-slate-500 dark:text-slate-400">{totalUnanswered}</span>
+                  <span className="text-muted-foreground text-xs">Unanswered</span>
+                </span>
+                <span className="flex items-center gap-1.5 text-sm">
+                  <span className="text-muted-foreground text-xs">Total:</span>
+                  <span className="font-semibold">{totalScore} / {totalMarks}</span>
+                </span>
+              </div>
             </div>
           </div>
         </CardContent>
       </Card>
 
-      {/* Stats Row */}
-      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
-        <Card>
-          <CardContent className="flex flex-col items-center gap-1 pb-4 pt-4">
-            <Target className="h-5 w-5 text-blue-500" />
-            <span className="text-2xl font-bold">{totalScore}</span>
-            <span className="text-muted-foreground text-xs">Total Score</span>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="flex flex-col items-center gap-1 pb-4 pt-4">
-            <CheckCircle2 className="h-5 w-5 text-emerald-500" />
-            <span className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">
-              {totalCorrect}
-            </span>
-            <span className="text-muted-foreground text-xs">Correct</span>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="flex flex-col items-center gap-1 pb-4 pt-4">
-            <XCircle className="h-5 w-5 text-red-500" />
-            <span className="text-2xl font-bold text-red-600 dark:text-red-400">
-              {totalWrong}
-            </span>
-            <span className="text-muted-foreground text-xs">Wrong</span>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="flex flex-col items-center gap-1 pb-4 pt-4">
-            <MinusCircle className="h-5 w-5 text-slate-400" />
-            <span className="text-2xl font-bold text-slate-500 dark:text-slate-400">
-              {totalUnanswered}
-            </span>
-            <span className="text-muted-foreground text-xs">Unanswered</span>
-          </CardContent>
-        </Card>
-      </div>
-
-      <Separator className="mb-6" />
-
-      {/* Per-question table */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">
-            Question-by-Question Breakdown
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {attempt.responses.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12">
-              <MinusCircle className="text-muted-foreground mb-2 h-8 w-8 opacity-50" />
-              <p className="text-muted-foreground text-sm">
-                No responses recorded for this attempt.
-              </p>
-            </div>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-12">#</TableHead>
-                  <TableHead>Section</TableHead>
-                  <TableHead className="min-w-[200px]">
-                    Question Text
-                  </TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Selected Answer</TableHead>
-                  <TableHead>Correct Answer</TableHead>
-                  <TableHead className="text-center">Correct?</TableHead>
-                  <TableHead className="text-right">Marks</TableHead>
-                  <TableHead className="text-right">Time Spent</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {attempt.responses.map((response, index) => {
-                  const options = response.question.options as
-                    | Option[]
-                    | null;
-                  const isUnanswered = !response.selectedAnswer;
-
-                  return (
-                    <TableRow key={response.id}>
-                      <TableCell className="text-muted-foreground font-medium">
-                        {index + 1}
-                      </TableCell>
-                      <TableCell className="text-muted-foreground text-sm">
-                        {response.section.title}
-                      </TableCell>
-                      <TableCell className="max-w-[300px] truncate text-sm">
-                        {response.question.questionText}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className="text-xs capitalize">
-                          {response.question.questionType === "true_false"
-                            ? "True/False"
-                            : response.question.questionType === "fill_blank"
-                              ? "Fill Blank"
-                              : "MCQ"}
-                        </Badge>
-                      </TableCell>
-                      <TableCell
-                        className={
-                          isUnanswered
-                            ? "text-muted-foreground italic text-sm"
-                            : "text-sm"
-                        }
-                      >
-                        {getAnswerDisplayText(
-                          response.selectedAnswer,
-                          options
-                        )}
-                      </TableCell>
-                      <TableCell className="text-sm">
-                        {getCorrectAnswerDisplayText(
-                          response.question.correctAnswer,
-                          options
-                        )}
-                      </TableCell>
-                      <TableCell className="text-center">
-                        {isUnanswered ? (
-                          <MinusCircle className="mx-auto h-4 w-4 text-slate-400" />
-                        ) : response.isCorrect ? (
-                          <CheckCircle2 className="mx-auto h-4 w-4 text-emerald-500" />
-                        ) : (
-                          <XCircle className="mx-auto h-4 w-4 text-red-500" />
-                        )}
-                      </TableCell>
-                      <TableCell className="text-right font-medium">
-                        {Number(response.marksAwarded)}
-                      </TableCell>
-                      <TableCell className="text-muted-foreground text-right text-sm">
-                        {formatTimeSpent(response.timeSpentSec)}
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
+      {/* Section-wise Breakdown (expandable per-section questions) */}
+      <SectionBreakdown
+        sections={sectionRows}
+        passingPercentage={passingPercentage}
+      />
 
       {/* Footer */}
       <div className="mt-6 text-center">
