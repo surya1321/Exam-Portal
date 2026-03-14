@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { LayoutDashboard, FileText, LogOut, Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -29,7 +30,7 @@ export function MobileSidebar() {
       <SheetContent side="left" className="w-64 p-0">
         <SheetHeader className="border-b px-6 py-4">
           <SheetTitle className="flex items-center gap-2 text-lg font-bold">
-            <LayoutDashboard className="h-5 w-5 text-primary" />
+            <Image src="/GC LOGO.svg" alt="Exam Portal Logo" width={28} height={28} quality={100} className="object-contain" />
             Exam Portal
           </SheetTitle>
         </SheetHeader>

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { ClipboardList, ArrowRight, Clock, Shield } from "lucide-react";
 
@@ -14,9 +15,7 @@ export default async function ExamInfoPage({
       {/* Header */}
       <header className="border-b bg-card">
         <div className="max-w-2xl mx-auto flex items-center gap-2.5 px-6 h-14">
-          <div className="flex h-7 w-7 items-center justify-center rounded-md bg-primary text-white">
-            <ClipboardList className="h-3.5 w-3.5" />
-          </div>
+          <Image src="/GC LOGO.svg" alt="Exam Portal Logo" width={32} height={32} quality={100} className="object-contain" />
           <span className="font-semibold tracking-tight">Exam Portal</span>
         </div>
       </header>

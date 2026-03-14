@@ -868,7 +868,7 @@ export default function ExamCompletePage() {
         <div className="max-w-2xl mx-auto flex items-center gap-2.5 px-6 h-14">
           <div className="flex h-7 w-7 items-center justify-center rounded-md bg-primary/10 overflow-hidden">
             <Image
-              src="/GC LOGO.png"
+              src="/GC LOGO.svg"
               alt="GC Logo"
               width={28}
               height={28}

@@ -1,6 +1,6 @@
 ---
 name: frontend-optimization-review
-description: "Perform deep, production-grade frontend optimization reviews using a multi-agent architecture where specialized sub-agents independently explore their domain in parallel and report findings back to a master orchestrator agent that synthesizes a unified, authoritative optimization report. Primarily focused on React and Next.js applications. Use this skill whenever reviewing frontend code for performance, rendering efficiency, bundle size, accessibility, UX quality, or production readiness. Trigger on: frontend code reviews, React/Next.js optimization, performance audits, Core Web Vitals improvement, bundle analysis, useEffect audit, server component migration, TanStack Query adoption, accessibility review, SEO review, design system consistency checks, or any task where deep frontend analysis is needed — even if the user doesn't explicitly say 'frontend review'. Apply this skill even when the user asks to 'check my components', 'review this page', 'optimize performance', 'why is this slow', or 'is this production ready'."
+description: "Use when reviewing React or Next.js frontend code for performance, rendering efficiency, bundle size, accessibility, UX quality, Core Web Vitals, or production readiness."
 ---
 
 # Multi-Agent Frontend Optimization Review — A Full Performance Review Board

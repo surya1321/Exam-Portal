@@ -1,4 +1,5 @@
 import { ShieldCheck } from "lucide-react";
+import Image from "next/image";
 
 export default function AuthLayout({
   children,
@@ -10,9 +11,7 @@ export default function AuthLayout({
       {/* Brand panel */}
       <div className="hidden lg:flex lg:w-[480px] xl:w-[560px] flex-col justify-between bg-primary p-10 text-white">
         <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/15">
-            <ShieldCheck className="h-5 w-5" />
-          </div>
+          <Image src="/GC LOGO.svg" alt="Exam Portal Logo" width={40} height={40} quality={100} className="object-contain" />
           <span className="text-lg font-semibold tracking-tight">Exam Portal</span>
         </div>
 
