@@ -4,7 +4,6 @@ import { useTransition, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import Link from "next/link";
-import { ShieldCheck } from "lucide-react";
 import Image from "next/image";
 
 import {
