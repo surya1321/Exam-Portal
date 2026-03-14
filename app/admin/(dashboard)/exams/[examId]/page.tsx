@@ -76,13 +76,6 @@ export default async function ExamDetailPage({ params }: ExamDetailPageProps) {
 
   return (
     <div className="p-6 lg:p-8 space-y-6">
-      {/* Back link */}
-      <Button variant="ghost" size="sm" asChild>
-        <Link href="/admin/exams">
-          <ArrowLeft className="h-4 w-4" />
-          Back to Exams
-        </Link>
-      </Button>
 
       {/* Exam header */}
       <div className="flex items-start justify-between">

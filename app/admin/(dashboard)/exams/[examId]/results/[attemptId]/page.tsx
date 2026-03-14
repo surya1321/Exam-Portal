@@ -116,13 +116,6 @@ export default async function AttemptDetailPage({
 
   return (
     <div className="p-6 lg:p-8">
-      {/* Back link */}
-      <Button variant="ghost" size="sm" asChild className="mb-4">
-        <Link href={`/admin/exams/${examId}/results`}>
-          <ArrowLeft className="h-4 w-4" />
-          Back to Results
-        </Link>
-      </Button>
 
       <h1 className="mb-6 text-2xl font-bold tracking-tight">
         Attempt Detail &mdash; {attempt.exam.title}

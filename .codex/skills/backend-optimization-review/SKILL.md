@@ -1,6 +1,6 @@
 ---
 name: backend-optimization-review
-description: "Perform deep, production-grade backend optimization and code reviews using a multi-agent architecture where specialized sub-agents independently explore their domain in parallel and report findings back to a master orchestrator agent that synthesizes a unified, authoritative optimization report. Primarily focused on Python, FastAPI, SQLAlchemy, and PostgreSQL applications. Use this skill whenever reviewing backend code for performance, database query efficiency, async correctness, API design, security, infrastructure configuration, or production readiness. Trigger on: backend code reviews, FastAPI optimization, SQLAlchemy query audits, PostgreSQL index analysis, async/await correctness reviews, N+1 query detection, connection pool tuning, API design reviews, security audits, production readiness assessments, Pydantic model reviews, Alembic migration reviews, or any task where deep backend analysis is needed — even if the user doesn't explicitly say 'backend review'. Apply this skill even when the user asks to 'check my endpoints', 'review this service', 'optimize my queries', 'why is this slow', 'is this production ready', or 'audit this API'."
+description: "Use when reviewing backend code for performance, database queries, async correctness, API design, security, infrastructure, or production readiness in Python, FastAPI, SQLAlchemy, and PostgreSQL systems."
 ---
 
 # Multi-Agent Backend Optimization Review — A Full Backend Engineering Review Board

@@ -458,22 +458,14 @@ export function SectionManager({ examId, sections }: SectionManagerProps) {
       />
 
       {/* Question form dialog */}
-      {activeSectionId && (
-        <QuestionForm
-          examId={examId}
-          sectionId={activeSectionId}
-          question={editingQuestion}
-          nextOrderIndex={nextQuestionOrderIndex}
-          open={questionDialogOpen}
-          onOpenChange={(open) => {
-            setQuestionDialogOpen(open);
-            if (!open) {
-              setEditingQuestion(undefined);
-              setActiveSectionId("");
-            }
-          }}
-        />
-      )}
+      <QuestionForm
+        examId={examId}
+        sectionId={activeSectionId}
+        question={editingQuestion}
+        nextOrderIndex={nextQuestionOrderIndex}
+        open={questionDialogOpen}
+        onOpenChange={setQuestionDialogOpen}
+      />
 
       {/* Delete section confirmation */}
       <AlertDialog

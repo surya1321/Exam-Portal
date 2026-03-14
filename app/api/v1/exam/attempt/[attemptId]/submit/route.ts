@@ -8,8 +8,10 @@ export async function POST(
 ) {
   const { attemptId } = await params;
 
+  // Select only the field needed for validation
   const attempt = await prisma.examAttempt.findUnique({
     where: { id: attemptId },
+    select: { status: true },
   });
   if (!attempt || attempt.status !== "in_progress") {
     return NextResponse.json(

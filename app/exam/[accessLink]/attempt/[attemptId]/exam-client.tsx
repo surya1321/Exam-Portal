@@ -246,7 +246,7 @@ export function ExamClient({
         <div className="flex items-center gap-4 text-foreground">
           <div className="flex items-center justify-center rounded-lg bg-primary/10 overflow-hidden">
             <Image
-              src="/GC LOGO.png"
+              src="/GC LOGO.svg"
               alt="GC Logo"
               width={32}
               height={32}

@@ -3,11 +3,16 @@ import { Badge } from "@/components/ui/badge";
 import { FileText, Users, Activity, BarChart3 } from "lucide-react";
 import { requireAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { DashboardCharts } from "./components/dashboard-charts";
 
 export default async function DashboardPage() {
   const admin = await requireAdmin();
 
-  const [examCount, candidateCount, activeExams, recentAttempts] =
+  const sevenDaysAgo = new Date();
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+  sevenDaysAgo.setHours(0, 0, 0, 0);
+
+  const [examCount, candidateCount, activeExams, recentAttempts, allAttempts] =
     await Promise.all([
       prisma.exam.count({ where: { adminId: admin.id } }),
       prisma.candidate.count({ where: { exam: { adminId: admin.id } } }),
@@ -20,17 +25,47 @@ export default async function DashboardPage() {
         orderBy: { startedAt: "desc" },
         include: { candidate: true, exam: { select: { title: true } } },
       }),
+      prisma.examAttempt.findMany({
+        where: { exam: { adminId: admin.id } },
+        select: { startedAt: true, status: true },
+      }),
     ]);
 
   const stats = [
     { label: "Total Exams", value: examCount, icon: FileText, color: "text-primary" },
     { label: "Candidates", value: candidateCount, icon: Users, color: "text-emerald-600 dark:text-emerald-400" },
     { label: "Active Exams", value: activeExams, icon: Activity, color: "text-amber-600 dark:text-amber-400" },
-    { label: "Recent Attempts", value: recentAttempts.length, icon: BarChart3, color: "text-violet-600 dark:text-violet-400" },
+    { label: "Total Attempts", value: allAttempts.length, icon: BarChart3, color: "text-violet-600 dark:text-violet-400" },
   ];
 
+  // Prepare chart data
+  const last7Days = Array.from({ length: 7 }).map((_, i) => {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    return d.toISOString().split("T")[0];
+  }).reverse();
+
+  const recent7DaysAttempts = allAttempts.filter(a => a.startedAt >= sevenDaysAgo);
+
+  const attemptsByDay = last7Days.map(date => {
+    return {
+      date,
+      attempts: recent7DaysAttempts.filter(a => a.startedAt.toISOString().split("T")[0] === date).length
+    }
+  });
+
+  const statusDistribution = [
+    { status: "Completed", value: allAttempts.filter(a => a.status === 'completed').length, fill: "var(--color-completed)" },
+    { status: "In Progress", value: allAttempts.filter(a => a.status === 'in_progress').length, fill: "var(--color-in_progress)" },
+    { status: "Other", value: allAttempts.filter(a => ['timed_out', 'abandoned'].includes(a.status)).length, fill: "var(--color-other)" },
+  ].filter(s => s.value > 0);
+  
+  if (statusDistribution.length === 0) {
+    statusDistribution.push({ status: "No Data", value: 1, fill: "hsl(var(--muted))" });
+  }
+
   return (
-    <div className="p-6 lg:p-8 space-y-8">
+    <div className="p-4 lg:p-6 space-y-6 lg:space-y-8">
       {/* Welcome */}
       <div>
         <h1 className="text-2xl font-bold tracking-tight">
@@ -58,11 +93,13 @@ export default async function DashboardPage() {
         ))}
       </div>
 
+      <DashboardCharts attemptsByDay={attemptsByDay} statusDistribution={statusDistribution} />
+
       {/* Recent Activity */}
       {recentAttempts.length > 0 && (
-        <Card>
+        <Card className="mt-8">
           <CardHeader className="pb-3">
-            <CardTitle className="text-base font-semibold">Recent Activity</CardTitle>
+            <CardTitle className="text-base font-semibold text-muted-foreground uppercase tracking-wider">Recent Activity</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-0 divide-y">

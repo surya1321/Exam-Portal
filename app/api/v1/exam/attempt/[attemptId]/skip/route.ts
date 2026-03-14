@@ -22,8 +22,14 @@ export async function POST(
     );
   }
 
+  // Select only the fields needed for validation — avoids loading full row
   const attempt = await prisma.examAttempt.findUnique({
     where: { id: attemptId },
+    select: {
+      status: true,
+      examId: true,
+      currentQuestionId: true,
+    },
   });
   if (!attempt || attempt.status !== "in_progress") {
     return NextResponse.json(
@@ -48,43 +54,51 @@ export async function POST(
     );
   }
 
-  // Get the question to retrieve sectionId
+  // Get the question's sectionId — select only the field we need
   const question = await prisma.question.findUnique({
     where: { id: questionId },
+    select: { sectionId: true },
   });
   if (!question) {
     return NextResponse.json({ error: "Question not found" }, { status: 404 });
   }
+
+  // Preload ordered questions BEFORE the transaction to reduce transaction lock duration
+  const allQuestions = await getOrderedQuestions(attempt.examId);
 
   // Transaction: atomically check + create skip response + advance cursor
   try {
     await prisma.$transaction(async (tx) => {
       const existingResponse = await tx.response.findUnique({
         where: { attemptId_questionId: { attemptId, questionId } },
+        select: { id: true }, // Only check existence
       });
       if (existingResponse) {
         throw new Error("ALREADY_RESPONDED");
       }
 
-      await tx.response.create({
-        data: {
-          attemptId,
-          questionId,
-          sectionId: question.sectionId,
-          selectedAnswer: null,
-          isCorrect: false,
-          marksAwarded: 0,
-        },
-      });
+      // Compute next question from preloaded data
+      const nextQuestion = await getNextQuestion(attemptId, allQuestions);
 
-      // Advance cursor inside the transaction
-      const nextQuestion = await getNextQuestion(attemptId);
-      await tx.examAttempt.update({
-        where: { id: attemptId },
-        data: {
-          currentQuestionId: nextQuestion?.id || null,
-        },
-      });
+      // Batch: create response + advance cursor in parallel within transaction
+      await Promise.all([
+        tx.response.create({
+          data: {
+            attemptId,
+            questionId,
+            sectionId: question.sectionId,
+            selectedAnswer: null,
+            isCorrect: false,
+            marksAwarded: 0,
+          },
+        }),
+        tx.examAttempt.update({
+          where: { id: attemptId },
+          data: {
+            currentQuestionId: nextQuestion?.id || null,
+          },
+        }),
+      ]);
     });
   } catch (err: unknown) {
     if (err instanceof Error && err.message === "ALREADY_RESPONDED") {
@@ -96,8 +110,7 @@ export async function POST(
     throw err;
   }
 
-  // Prefetch: return the next question inline
-  const allQuestions = await getOrderedQuestions(attempt.examId);
+  // Reuse the preloaded questions — no redundant getOrderedQuestions call
   const nextQ = await getNextQuestion(attemptId, allQuestions);
   const answeredCount = await prisma.response.count({ where: { attemptId } });
 

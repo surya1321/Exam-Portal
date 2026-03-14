@@ -1,18 +1,11 @@
 "use client";
 
-import { useTransition } from "react";
+import { useTransition, useEffect } from "react";
 import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
 
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import Slider from "@/components/ui/slider-panel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -104,6 +97,32 @@ export function QuestionForm({
       },
   });
 
+  useEffect(() => {
+    if (open) {
+      reset(
+        question
+          ? {
+              questionText: question.questionText,
+              questionType: question.questionType,
+              options: question.options ?? defaultOptions,
+              correctAnswer: question.correctAnswer,
+              marks: question.marks,
+              explanation: question.explanation ?? "",
+              orderIndex: question.orderIndex,
+            }
+          : {
+              questionText: "",
+              questionType: "mcq",
+              options: defaultOptions,
+              correctAnswer: "",
+              marks: 1,
+              explanation: "",
+              orderIndex: nextOrderIndex,
+            }
+      );
+    }
+  }, [open, question, nextOrderIndex, reset]);
+
   const { fields } = useFieldArray({
     control,
     name: "options",
@@ -161,18 +180,18 @@ export function QuestionForm({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>
-            {isEditing ? "Edit Question" : "Add Question"}
-          </DialogTitle>
-          <DialogDescription>
-            {isEditing
-              ? "Update the question details below."
-              : "Fill in the details to add a new question."}
-          </DialogDescription>
-        </DialogHeader>
+    <Slider
+      isOpen={open}
+      onClose={() => onOpenChange(false)}
+      width="max-w-2xl"
+      heading={isEditing ? "Edit Question" : "Add Question"}
+    >
+      <div className="p-4 sm:p-6 pb-20">
+        <p className="text-sm text-muted-foreground mb-6">
+          {isEditing
+            ? "Update the question details below."
+            : "Fill in the details to add a new question."}
+        </p>
 
         <form onSubmit={handleSubmit(onSubmit)} className="grid gap-4">
           {/* Question Type */}
@@ -378,7 +397,7 @@ export function QuestionForm({
           {/* Hidden order index */}
           <input type="hidden" {...register("orderIndex", { valueAsNumber: true })} />
 
-          <DialogFooter>
+          <div className="mt-8 flex items-center justify-end gap-3 pt-6 border-t border-border">
             <Button
               type="button"
               variant="outline"
@@ -396,9 +415,9 @@ export function QuestionForm({
                   ? "Update Question"
                   : "Add Question"}
             </Button>
-          </DialogFooter>
+          </div>
         </form>
-      </DialogContent>
-    </Dialog>
+      </div>
+    </Slider>
   );
 }

@@ -55,13 +55,6 @@ export default async function CandidatesPage({ params }: CandidatesPageProps) {
 
   return (
     <div className="p-6 lg:p-8 space-y-6">
-      {/* Back link */}
-      <Button variant="ghost" size="sm" asChild>
-        <Link href={`/admin/exams/${examId}`}>
-          <ArrowLeft className="h-4 w-4" />
-          Back to Exam
-        </Link>
-      </Button>
 
       {/* Header */}
       <div className="flex items-center gap-3">

@@ -5,6 +5,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import Link from "next/link";
 import { ShieldCheck } from "lucide-react";
+import Image from "next/image";
 
 import {
   adminSignUpSchema,
@@ -50,9 +51,7 @@ export default function AdminSignUpPage() {
     <div className="space-y-8">
       {/* Mobile brand (hidden on lg) */}
       <div className="flex items-center gap-3 lg:hidden">
-        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10">
-          <ShieldCheck className="h-5 w-5 text-primary" />
-        </div>
+        <Image src="/GC LOGO.svg" alt="Exam Portal Logo" width={36} height={36} quality={100} className="object-contain" />
         <span className="text-lg font-semibold tracking-tight">Exam Portal</span>
       </div>
 

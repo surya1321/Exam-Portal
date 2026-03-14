@@ -14,8 +14,13 @@ export async function GET(
 ) {
   const { attemptId } = await params;
 
+  // Select only the fields needed for validation + examId for question lookup
   const attempt = await prisma.examAttempt.findUnique({
     where: { id: attemptId },
+    select: {
+      status: true,
+      examId: true,
+    },
   });
   if (!attempt || attempt.status !== "in_progress") {
     return NextResponse.json(
@@ -40,6 +45,7 @@ export async function GET(
     return NextResponse.json({ allAnswered: true });
   }
 
+  // Parallelize independent I/O: time remaining + response count
   const [timeRemaining, answeredCount] = await Promise.all([
     getTimeRemaining(attemptId),
     prisma.response.count({ where: { attemptId } }),
