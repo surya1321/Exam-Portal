@@ -3,7 +3,6 @@ import { prisma } from "@/lib/prisma";
 import {
   isAttemptExpired,
   computeAndSubmitAttempt,
-  getNextQuestion,
   getOrderedQuestions,
 } from "@/lib/exam-engine";
 
@@ -28,7 +27,6 @@ export async function POST(
     select: {
       status: true,
       examId: true,
-      currentQuestionId: true,
     },
   });
   if (!attempt || attempt.status !== "in_progress") {
@@ -46,13 +44,7 @@ export async function POST(
     );
   }
 
-  // Forward-only: verify the question is the current one
-  if (attempt.currentQuestionId !== questionId) {
-    return NextResponse.json(
-      { error: "Cannot skip this question (forward-only)" },
-      { status: 400 }
-    );
-  }
+
 
   // Get the question's sectionId — select only the field we need
   const question = await prisma.question.findUnique({
@@ -66,6 +58,12 @@ export async function POST(
   // Preload ordered questions BEFORE the transaction to reduce transaction lock duration
   const allQuestions = await getOrderedQuestions(attempt.examId);
 
+  // Compute next question ID from the ordered list (avoids querying inside the transaction)
+  const currentIndex = allQuestions.findIndex((q) => q.id === questionId);
+  const nextQuestionId = currentIndex >= 0 && currentIndex < allQuestions.length - 1
+    ? allQuestions[currentIndex + 1].id
+    : null;
+
   // Transaction: atomically check + create skip response + advance cursor
   try {
     await prisma.$transaction(async (tx) => {
@@ -76,9 +74,6 @@ export async function POST(
       if (existingResponse) {
         throw new Error("ALREADY_RESPONDED");
       }
-
-      // Compute next question from preloaded data
-      const nextQuestion = await getNextQuestion(attemptId, allQuestions);
 
       // Batch: create response + advance cursor in parallel within transaction
       await Promise.all([
@@ -95,7 +90,7 @@ export async function POST(
         tx.examAttempt.update({
           where: { id: attemptId },
           data: {
-            currentQuestionId: nextQuestion?.id || null,
+            currentQuestionId: nextQuestionId,
           },
         }),
       ]);
@@ -110,43 +105,5 @@ export async function POST(
     throw err;
   }
 
-  // Reuse the preloaded questions — no redundant getOrderedQuestions call
-  const nextQ = await getNextQuestion(attemptId, allQuestions);
-  const answeredCount = await prisma.response.count({ where: { attemptId } });
-
-  if (!nextQ) {
-    return NextResponse.json({
-      success: true,
-      skipped: true,
-      allAnswered: true,
-      nextQuestion: null,
-      section: null,
-      progress: {
-        current: answeredCount + 1,
-        total: allQuestions.length,
-      },
-    });
-  }
-
-  return NextResponse.json({
-    success: true,
-    skipped: true,
-    allAnswered: false,
-    nextQuestion: {
-      id: nextQ.id,
-      text: nextQ.questionText,
-      type: nextQ.questionType,
-      options: nextQ.options,
-      marks: Number(nextQ.marks),
-      imageUrl: nextQ.imageUrl,
-    },
-    section: {
-      id: nextQ.sectionId,
-      title: nextQ.sectionTitle,
-    },
-    progress: {
-      current: answeredCount + 1,
-      total: allQuestions.length,
-    },
-  });
+  return NextResponse.json({ success: true, skipped: true });
 }

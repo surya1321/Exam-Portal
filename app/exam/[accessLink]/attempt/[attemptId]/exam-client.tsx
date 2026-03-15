@@ -67,29 +67,6 @@ export function ExamClient({
   const [allAnswered, setAllAnswered] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Apply prefetched question data from an API response
-  function applyPrefetchedData(data: {
-    allAnswered: boolean;
-    nextQuestion: Question | null;
-    section: Section | null;
-    progress: Progress;
-  }) {
-    if (data.allAnswered) {
-      setAllAnswered(true);
-      setQuestion(null);
-      setLoading(false);
-      return;
-    }
-    if (data.nextQuestion) {
-      setQuestion(data.nextQuestion);
-      setSection(data.section);
-      setProgress(data.progress);
-      setSelectedAnswer(null);
-      setAllAnswered(false);
-      setLoading(false);
-    }
-  }
-
   // Fetch current question
   const fetchCurrentQuestion = useCallback(async () => {
     setLoading(true);
@@ -172,8 +149,8 @@ export function ExamClient({
         return;
       }
 
-      const data = await res.json();
-      applyPrefetchedData(data);
+      // Fetch the next question from the /current endpoint
+      await fetchCurrentQuestion();
     } catch {
       setError("Network error. Please try again.");
     } finally {
@@ -204,8 +181,8 @@ export function ExamClient({
         return;
       }
 
-      const data = await res.json();
-      applyPrefetchedData(data);
+      // Fetch the next question from the /current endpoint
+      await fetchCurrentQuestion();
     } catch {
       setError("Network error. Please try again.");
     } finally {
