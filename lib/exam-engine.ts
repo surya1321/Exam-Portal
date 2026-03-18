@@ -146,11 +146,11 @@ export async function computeAndSubmitAttempt(attemptId: string) {
   // Separate essay questions from auto-gradable ones
   const allQuestions = attempt.exam.sections.flatMap((s) => s.questions);
   const gradableQuestions = allQuestions.filter(
-    (q) => (q.questionType as string) !== "essay"
+    (q) => q.questionType !== "essay"
   );
 
   const gradableResponses = attempt.responses.filter(
-    (r) => (r.question.questionType as string) !== "essay"
+    (r) => r.question.questionType !== "essay"
   );
 
   const totalCorrect = gradableResponses.filter((r) => r.isCorrect).length;
@@ -184,16 +184,9 @@ export async function computeAndSubmitAttempt(attemptId: string) {
     },
   });
 
-  // Already submitted by another request
+  // Already submitted by another request (idempotent — return null, caller handles it)
   if (count === 0) return null;
 
-  return prisma.examAttempt.findUnique({
-    where: { id: attemptId },
-    select: {
-      totalScore: true,
-      totalCorrect: true,
-      totalWrong: true,
-      totalUnanswered: true,
-    },
-  });
+  // Return computed values directly — avoids an extra DB round-trip
+  return { totalScore, totalCorrect, totalWrong, totalUnanswered };
 }

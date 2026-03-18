@@ -18,7 +18,7 @@ export function useExamTimer(attemptId: string, initialSeconds: number) {
       });
     }, 1000);
     return () => clearInterval(interval);
-  }, [seconds > 0]); // Only re-run if transitioning to/from 0
+  }, []); // Run once — functional updater captures no external state
 
   // Sync with server every 30 seconds
   useEffect(() => {

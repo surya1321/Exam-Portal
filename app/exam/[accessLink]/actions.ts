@@ -62,7 +62,21 @@ export async function signInCandidate(input: unknown) {
   };
 }
 
-export async function startExam(examId: string, candidateId: string) {
+export async function startExam() {
+  // Read IDs from the server-side session cookie — never trust client-supplied IDs
+  const cookieStore = await cookies();
+  const raw = cookieStore.get("candidate_session")?.value;
+  if (!raw) return { error: "Unauthorized" };
+
+  let session: { candidateId: string; examId: string; attemptId: string | null };
+  try {
+    session = JSON.parse(raw);
+  } catch {
+    return { error: "Invalid session" };
+  }
+
+  const { candidateId, examId } = session;
+
   const exam = await prisma.exam.findUnique({
     where: { id: examId },
     include: {
@@ -106,6 +120,19 @@ export async function startExam(examId: string, candidateId: string) {
     data: { isUsed: true },
   });
 
+  // Update session cookie with the new attemptId so API routes can verify it
+  cookieStore.set("candidate_session", JSON.stringify({
+    candidateId,
+    examId,
+    attemptId: attempt.id,
+  }), {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    maxAge: 60 * 60 * 3,
+    path: "/",
+  });
+
   return { data: { attemptId: attempt.id } };
 }
 
@@ -120,6 +147,7 @@ export async function getCandidateSession() {
       attemptId: string | null;
     };
   } catch {
+    console.error("[getCandidateSession] Failed to parse session cookie");
     return null;
   }
 }

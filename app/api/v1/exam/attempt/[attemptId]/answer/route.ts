@@ -1,39 +1,47 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { prisma } from "@/lib/prisma";
+import { getVerifiedCandidateSession } from "@/lib/session";
 import {
   isAttemptExpired,
   computeAndSubmitAttempt,
   getOrderedQuestions,
 } from "@/lib/exam-engine";
 
+const answerBodySchema = z.object({
+  questionId: z.string().uuid("questionId must be a valid UUID"),
+  selectedAnswer: z.string().min(1, "selectedAnswer is required").max(10000),
+});
+
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ attemptId: string }> }
 ) {
   const { attemptId } = await params;
-  const body = await request.json();
-  const { questionId, selectedAnswer } = body;
 
-  if (!questionId || !selectedAnswer) {
+  const session = await getVerifiedCandidateSession(attemptId);
+  if (!session) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const parseResult = answerBodySchema.safeParse(await request.json());
+  if (!parseResult.success) {
     return NextResponse.json(
-      { error: "questionId and selectedAnswer are required" },
+      { error: parseResult.error.issues[0].message },
       { status: 400 }
     );
   }
+  const { questionId, selectedAnswer } = parseResult.data;
 
-  // Select only the fields needed for validation — avoids loading full row
   const attempt = await prisma.examAttempt.findUnique({
     where: { id: attemptId },
-    select: {
-      status: true,
-      examId: true,
-    },
+    select: { status: true, examId: true },
   });
-  if (!attempt || attempt.status !== "in_progress") {
-    return NextResponse.json(
-      { error: "Invalid or completed attempt" },
-      { status: 403 }
-    );
+  if (!attempt) {
+    return NextResponse.json({ error: "Attempt not found" }, { status: 404 });
+  }
+  if (attempt.status !== "in_progress") {
+    return NextResponse.json({ error: "Attempt already completed" }, { status: 409 });
   }
 
   if (await isAttemptExpired(attemptId)) {
@@ -44,9 +52,6 @@ export async function POST(
     );
   }
 
-
-
-  // Get question details — select only needed fields instead of full row + section
   const question = await prisma.question.findUnique({
     where: { id: questionId },
     select: {
@@ -60,22 +65,16 @@ export async function POST(
     return NextResponse.json({ error: "Question not found" }, { status: 404 });
   }
 
-  // Compute correctness and marks
-  // Essay questions are not auto-graded; they're stored as pending review
-  const isEssay = (question.questionType as string) === "essay";
+  const isEssay = question.questionType === "essay";
   const isCorrect = isEssay ? false : selectedAnswer === question.correctAnswer;
   let marksAwarded = 0;
   if (!isEssay) {
     if (isCorrect) {
       marksAwarded = Number(question.marks);
     } else {
-      // Select only the two fields needed for negative marking
       const exam = await prisma.exam.findUnique({
         where: { id: attempt.examId },
-        select: {
-          allowNegativeMarking: true,
-          negativeMarkValue: true,
-        },
+        select: { allowNegativeMarking: true, negativeMarkValue: true },
       });
       if (exam?.allowNegativeMarking) {
         marksAwarded = -Number(exam.negativeMarkValue);
@@ -83,27 +82,23 @@ export async function POST(
     }
   }
 
-  // Preload ordered questions BEFORE the transaction to reduce transaction duration
   const allQuestions = await getOrderedQuestions(attempt.examId);
-
-  // Compute next question ID from the ordered list (avoids querying inside the transaction)
   const currentIndex = allQuestions.findIndex((q) => q.id === questionId);
-  const nextQuestionId = currentIndex >= 0 && currentIndex < allQuestions.length - 1
-    ? allQuestions[currentIndex + 1].id
-    : null;
+  const nextQuestionId =
+    currentIndex >= 0 && currentIndex < allQuestions.length - 1
+      ? allQuestions[currentIndex + 1].id
+      : null;
 
-  // Transaction: atomically check + create response + advance cursor
   try {
     await prisma.$transaction(async (tx) => {
       const existingResponse = await tx.response.findUnique({
         where: { attemptId_questionId: { attemptId, questionId } },
-        select: { id: true }, // Only check existence, don't load full row
+        select: { id: true },
       });
       if (existingResponse) {
         throw new Error("ALREADY_ANSWERED");
       }
 
-      // Batch: create response + advance cursor in parallel within transaction
       await Promise.all([
         tx.response.create({
           data: {
@@ -117,9 +112,7 @@ export async function POST(
         }),
         tx.examAttempt.update({
           where: { id: attemptId },
-          data: {
-            currentQuestionId: nextQuestionId,
-          },
+          data: { currentQuestionId: nextQuestionId },
         }),
       ]);
     });
@@ -130,7 +123,11 @@ export async function POST(
         { status: 400 }
       );
     }
-    throw err;
+    console.error("[answer/route] Unhandled error:", err);
+    return NextResponse.json(
+      { error: "An unexpected error occurred. Please try again." },
+      { status: 500 }
+    );
   }
 
   return NextResponse.json({ success: true });

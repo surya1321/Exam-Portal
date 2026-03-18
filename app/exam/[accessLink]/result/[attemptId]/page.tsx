@@ -88,7 +88,13 @@ export default async function ExamResultPage({
             <p className="text-xs text-muted-foreground">
               Attempt submitted on{" "}
               {attempt.submittedAt
-                ? new Date(attempt.submittedAt).toLocaleString()
+                ? new Date(attempt.submittedAt).toLocaleString("en-US", {
+                    year: "numeric",
+                    month: "long",
+                    day: "numeric",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })
                 : "---"}
             </p>
             <p className="text-xs text-muted-foreground">

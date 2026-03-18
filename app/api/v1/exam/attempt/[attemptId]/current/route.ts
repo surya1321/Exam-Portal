@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getVerifiedCandidateSession } from "@/lib/session";
 import {
   getTimeRemaining,
   isAttemptExpired,
@@ -14,7 +15,11 @@ export async function GET(
 ) {
   const { attemptId } = await params;
 
-  // Select only the fields needed for validation + examId for question lookup
+  const session = await getVerifiedCandidateSession(attemptId);
+  if (!session) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const attempt = await prisma.examAttempt.findUnique({
     where: { id: attemptId },
     select: {
@@ -22,11 +27,11 @@ export async function GET(
       examId: true,
     },
   });
-  if (!attempt || attempt.status !== "in_progress") {
-    return NextResponse.json(
-      { error: "Invalid or completed attempt" },
-      { status: 403 }
-    );
+  if (!attempt) {
+    return NextResponse.json({ error: "Attempt not found" }, { status: 404 });
+  }
+  if (attempt.status !== "in_progress") {
+    return NextResponse.json({ error: "Attempt already completed" }, { status: 409 });
   }
 
   if (await isAttemptExpired(attemptId)) {
@@ -37,7 +42,6 @@ export async function GET(
     );
   }
 
-  // Fetch questions once and reuse for both getNextQuestion and progress
   const allQuestions = await getOrderedQuestions(attempt.examId);
   const next = await getNextQuestion(attemptId, allQuestions);
 
@@ -45,7 +49,6 @@ export async function GET(
     return NextResponse.json({ allAnswered: true });
   }
 
-  // Parallelize independent I/O: time remaining + response count
   const [timeRemaining, answeredCount] = await Promise.all([
     getTimeRemaining(attemptId),
     prisma.response.count({ where: { attemptId } }),
