@@ -22,7 +22,9 @@
       "Bash(npx next:*)",
       "Bash(taskkill:*)",
       "Bash(timeout 90 npx prisma:*)",
-      "Bash(DATABASE_URL=\"postgresql://postgres.fsokgzbpkobftgwajegi:jmGhZM6HHBQXH6ZH@aws-1-ap-south-1.pooler.supabase.com:5432/postgres\" npx prisma:*)"
+      "Bash(DATABASE_URL=\"postgresql://postgres.fsokgzbpkobftgwajegi:jmGhZM6HHBQXH6ZH@aws-1-ap-south-1.pooler.supabase.com:5432/postgres\" npx prisma:*)",
+      "mcp__plugin_chrome-devtools-mcp_chrome-devtools__navigate_page",
+      "mcp__plugin_chrome-devtools-mcp_chrome-devtools__performance_start_trace"
     ]
   }
 }

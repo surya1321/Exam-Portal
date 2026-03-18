@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { useExamTimer } from "@/hooks/use-exam-timer";
@@ -66,6 +66,7 @@ export function ExamClient({
   const [submitting, setSubmitting] = useState(false);
   const [allAnswered, setAllAnswered] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const submittingRef = useRef(false);
 
   // Fetch current question
   const fetchCurrentQuestion = useCallback(async () => {
@@ -115,9 +116,10 @@ export function ExamClient({
     fetchCurrentQuestion();
   }, [fetchCurrentQuestion]);
 
-  // Auto-submit on timer expiry
+  // Auto-submit on timer expiry — use ref to prevent stale closure double-submit
   useEffect(() => {
-    if (isExpired && !submitting) {
+    if (isExpired && !submittingRef.current) {
+      submittingRef.current = true;
       handleSubmitExam();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -192,6 +194,7 @@ export function ExamClient({
 
   // Submit entire exam
   async function handleSubmitExam() {
+    submittingRef.current = true;
     setSubmitting(true);
     try {
       const res = await fetch(`/api/v1/exam/attempt/${attemptId}/submit`, {
@@ -246,7 +249,7 @@ export function ExamClient({
             <AlertDialogTrigger asChild>
               <button
                 disabled={submitting}
-                className="flex items-center justify-center gap-2 rounded-lg h-9 px-4 bg-primary hover:bg-blue-700 text-white text-sm font-bold transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex items-center justify-center gap-2 rounded-lg h-9 px-4 bg-primary hover:bg-primary/90 text-primary-foreground text-sm font-bold transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <span>Submit Exam</span>
               </button>
@@ -321,16 +324,20 @@ export function ExamClient({
 
             {/* Error State */}
             {error && !loading && (
-              <div className="bg-card rounded-xl shadow-sm border border-red-200 dark:border-red-800 p-6 md:p-10 flex-1 flex flex-col items-center justify-center gap-4">
-                <span className="material-symbols-outlined text-red-500 text-[48px]">
+              <div
+                role="alert"
+                aria-live="assertive"
+                className="bg-card rounded-xl shadow-sm border border-red-200 dark:border-red-800 p-6 md:p-10 flex-1 flex flex-col items-center justify-center gap-4"
+              >
+                <span className="material-symbols-outlined text-destructive text-[48px]" aria-hidden="true">
                   error
                 </span>
-                <p className="text-red-600 dark:text-red-400 font-medium text-center">
+                <p className="text-destructive font-medium text-center">
                   {error}
                 </p>
                 <button
                   onClick={fetchCurrentQuestion}
-                  className="px-6 py-2.5 rounded-lg bg-primary hover:bg-blue-700 text-white font-semibold transition-colors"
+                  className="px-6 py-2.5 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground font-semibold transition-colors"
                 >
                   Retry
                 </button>
@@ -356,7 +363,7 @@ export function ExamClient({
                   <AlertDialogTrigger asChild>
                     <button
                       disabled={submitting}
-                      className="flex items-center gap-2 px-8 py-3 rounded-lg bg-primary hover:bg-blue-700 text-white font-semibold shadow-md shadow-primary/20 transition-all hover:shadow-primary/30 transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="flex items-center gap-2 px-8 py-3 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground font-semibold shadow-md shadow-primary/20 transition-all hover:shadow-primary/30 transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <span className="material-symbols-outlined text-[20px]">
                         send
@@ -401,11 +408,13 @@ export function ExamClient({
 
                 {/* Question Image */}
                 {question.imageUrl && (
-                  <div className="mt-4 rounded-lg overflow-hidden border border-border">
-                    <img
+                  <div className="mt-4 rounded-lg overflow-hidden border border-border relative w-full aspect-video max-h-80">
+                    <Image
                       src={question.imageUrl}
-                      alt="Question illustration"
-                      className="max-w-full h-auto max-h-80 object-contain mx-auto"
+                      alt={`Illustration for question ${progress.current}`}
+                      fill
+                      sizes="(max-width: 768px) 100vw, 768px"
+                      className="object-contain"
                     />
                   </div>
                 )}
@@ -425,7 +434,7 @@ export function ExamClient({
                   <button
                     onClick={handleNext}
                     disabled={!selectedAnswer || submitting}
-                    className="flex items-center gap-2 px-8 py-2.5 rounded-lg bg-primary hover:bg-blue-700 text-white font-semibold shadow-md shadow-primary/20 transition-all hover:shadow-primary/30 transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="flex items-center gap-2 px-8 py-2.5 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground font-semibold shadow-md shadow-primary/20 transition-all hover:shadow-primary/30 transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {submitting ? (
                       <>

@@ -56,7 +56,7 @@ export default function CandidateLoginPage() {
         return;
       }
 
-      const startResult = await startExam(data.examId, data.candidateId);
+      const startResult = await startExam();
 
       if ("error" in startResult) {
         setServerError(startResult.error ?? "Failed to start exam");
@@ -100,6 +100,7 @@ export default function CandidateLoginPage() {
                         type="email"
                         placeholder="Enter your email"
                         autoComplete="email"
+                        autoFocus
                         {...field}
                       />
                     </FormControl>
@@ -128,7 +129,7 @@ export default function CandidateLoginPage() {
               />
 
               {serverError && (
-                <div className="rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                <div role="alert" className="rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">
                   {serverError}
                 </div>
               )}

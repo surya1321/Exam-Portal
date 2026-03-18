@@ -45,9 +45,35 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
+  // Candidate exam API routes: require candidate_session cookie
+  if (pathname.startsWith("/api/v1/exam/attempt/")) {
+    const candidateSession = request.cookies.get("candidate_session");
+    if (!candidateSession) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+  }
+
+  // Candidate exam pages: redirect to login if no session
+  if (pathname.includes("/attempt/") || pathname.includes("/result/")) {
+    const candidateSession = request.cookies.get("candidate_session");
+    if (!candidateSession) {
+      const accessLink = pathname.split("/exam/")[1]?.split("/")[0];
+      if (accessLink) {
+        const url = request.nextUrl.clone();
+        url.pathname = `/exam/${accessLink}/login`;
+        return NextResponse.redirect(url);
+      }
+    }
+  }
+
   return supabaseResponse;
 }
 
 export const config = {
-  matcher: ["/admin/:path*"],
+  matcher: [
+    "/admin/:path*",
+    "/api/v1/exam/attempt/:path*",
+    "/exam/:accessLink/attempt/:path*",
+    "/exam/:accessLink/result/:path*",
+  ],
 };

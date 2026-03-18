@@ -1,39 +1,46 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { prisma } from "@/lib/prisma";
+import { getVerifiedCandidateSession } from "@/lib/session";
 import {
   isAttemptExpired,
   computeAndSubmitAttempt,
   getOrderedQuestions,
 } from "@/lib/exam-engine";
 
+const skipBodySchema = z.object({
+  questionId: z.string().uuid("questionId must be a valid UUID"),
+});
+
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ attemptId: string }> }
 ) {
   const { attemptId } = await params;
-  const body = await request.json();
-  const { questionId } = body;
 
-  if (!questionId) {
+  const session = await getVerifiedCandidateSession(attemptId);
+  if (!session) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const parseResult = skipBodySchema.safeParse(await request.json());
+  if (!parseResult.success) {
     return NextResponse.json(
-      { error: "questionId is required" },
+      { error: parseResult.error.issues[0].message },
       { status: 400 }
     );
   }
+  const { questionId } = parseResult.data;
 
-  // Select only the fields needed for validation — avoids loading full row
   const attempt = await prisma.examAttempt.findUnique({
     where: { id: attemptId },
-    select: {
-      status: true,
-      examId: true,
-    },
+    select: { status: true, examId: true },
   });
-  if (!attempt || attempt.status !== "in_progress") {
-    return NextResponse.json(
-      { error: "Invalid or completed attempt" },
-      { status: 403 }
-    );
+  if (!attempt) {
+    return NextResponse.json({ error: "Attempt not found" }, { status: 404 });
+  }
+  if (attempt.status !== "in_progress") {
+    return NextResponse.json({ error: "Attempt already completed" }, { status: 409 });
   }
 
   if (await isAttemptExpired(attemptId)) {
@@ -44,9 +51,6 @@ export async function POST(
     );
   }
 
-
-
-  // Get the question's sectionId — select only the field we need
   const question = await prisma.question.findUnique({
     where: { id: questionId },
     select: { sectionId: true },
@@ -55,27 +59,23 @@ export async function POST(
     return NextResponse.json({ error: "Question not found" }, { status: 404 });
   }
 
-  // Preload ordered questions BEFORE the transaction to reduce transaction lock duration
   const allQuestions = await getOrderedQuestions(attempt.examId);
-
-  // Compute next question ID from the ordered list (avoids querying inside the transaction)
   const currentIndex = allQuestions.findIndex((q) => q.id === questionId);
-  const nextQuestionId = currentIndex >= 0 && currentIndex < allQuestions.length - 1
-    ? allQuestions[currentIndex + 1].id
-    : null;
+  const nextQuestionId =
+    currentIndex >= 0 && currentIndex < allQuestions.length - 1
+      ? allQuestions[currentIndex + 1].id
+      : null;
 
-  // Transaction: atomically check + create skip response + advance cursor
   try {
     await prisma.$transaction(async (tx) => {
       const existingResponse = await tx.response.findUnique({
         where: { attemptId_questionId: { attemptId, questionId } },
-        select: { id: true }, // Only check existence
+        select: { id: true },
       });
       if (existingResponse) {
         throw new Error("ALREADY_RESPONDED");
       }
 
-      // Batch: create response + advance cursor in parallel within transaction
       await Promise.all([
         tx.response.create({
           data: {
@@ -89,9 +89,7 @@ export async function POST(
         }),
         tx.examAttempt.update({
           where: { id: attemptId },
-          data: {
-            currentQuestionId: nextQuestionId,
-          },
+          data: { currentQuestionId: nextQuestionId },
         }),
       ]);
     });
@@ -102,7 +100,11 @@ export async function POST(
         { status: 400 }
       );
     }
-    throw err;
+    console.error("[skip/route] Unhandled error:", err);
+    return NextResponse.json(
+      { error: "An unexpected error occurred. Please try again." },
+      { status: 500 }
+    );
   }
 
   return NextResponse.json({ success: true, skipped: true });
