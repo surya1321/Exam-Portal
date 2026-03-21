@@ -6,6 +6,8 @@ import {
   isAttemptExpired,
   computeAndSubmitAttempt,
   getOrderedQuestions,
+  getNextQuestion,
+  getTimeRemaining,
 } from "@/lib/exam-engine";
 
 const answerBodySchema = z.object({
@@ -66,7 +68,15 @@ export async function POST(
   }
 
   const isEssay = question.questionType === "essay";
-  const isCorrect = isEssay ? false : selectedAnswer === question.correctAnswer;
+  const isFillBlank = question.questionType === "fill_blank";
+
+  // Case-insensitive, trim comparison for fill-in-the-blank
+  const isCorrect = isEssay
+    ? false
+    : isFillBlank
+      ? selectedAnswer.trim().toLowerCase() === question.correctAnswer.trim().toLowerCase()
+      : selectedAnswer === question.correctAnswer;
+
   let marksAwarded = 0;
   if (!isEssay) {
     if (isCorrect) {
@@ -130,5 +140,45 @@ export async function POST(
     );
   }
 
-  return NextResponse.json({ success: true });
+  // Fetch next question inline to avoid a second round-trip
+  const [nextQ, timeRemaining, answeredCount] = await Promise.all([
+    getNextQuestion(attemptId, allQuestions),
+    getTimeRemaining(attemptId),
+    prisma.response.count({ where: { attemptId } }),
+  ]);
+
+  if (!nextQ) {
+    return NextResponse.json({
+      success: true,
+      next: {
+        allAnswered: true,
+        progress: { current: answeredCount + 1, total: allQuestions.length },
+        timeRemaining,
+      },
+    });
+  }
+
+  return NextResponse.json({
+    success: true,
+    next: {
+      question: {
+        id: nextQ.id,
+        text: nextQ.questionText,
+        type: nextQ.questionType,
+        options: nextQ.options,
+        marks: Number(nextQ.marks),
+        imageUrl: nextQ.imageUrl,
+      },
+      section: {
+        id: nextQ.sectionId,
+        title: nextQ.sectionTitle,
+      },
+      progress: {
+        current: answeredCount + 1,
+        total: allQuestions.length,
+      },
+      timeRemaining,
+    },
+  });
 }
+

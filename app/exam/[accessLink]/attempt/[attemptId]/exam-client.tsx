@@ -43,6 +43,8 @@ type ExamClientProps = {
   examTitle: string;
   candidateName: string;
   initialTimeRemaining: number;
+  examDurationMinutes: number;
+  totalQuestions: number;
 };
 
 export function ExamClient({
@@ -51,22 +53,62 @@ export function ExamClient({
   examTitle,
   candidateName,
   initialTimeRemaining,
+  examDurationMinutes,
+  totalQuestions,
 }: ExamClientProps) {
   const router = useRouter();
-  const { seconds, formatted, isExpired } = useExamTimer(
+  const { seconds, formatted, isExpired, reset: resetTimer } = useExamTimer(
     attemptId,
-    initialTimeRemaining
+    initialTimeRemaining,
+    true // start paused
   );
 
   const [question, setQuestion] = useState<Question | null>(null);
   const [section, setSection] = useState<Section | null>(null);
   const [progress, setProgress] = useState<Progress>({ current: 1, total: 1 });
+  const [answeredCount, setAnsweredCount] = useState(0);
   const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [timerReady, setTimerReady] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [allAnswered, setAllAnswered] = useState(false);
+  const [showInstructions, setShowInstructions] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const submittingRef = useRef(false);
+
+  /** Apply inline question data from any API response */
+  const applyQuestionData = useCallback(
+    (data: {
+      question?: Question;
+      section?: Section;
+      progress?: Progress;
+      timeRemaining?: number;
+      allAnswered?: boolean;
+    }) => {
+      if (data.allAnswered) {
+        setAllAnswered(true);
+        setQuestion(null);
+        setAnsweredCount(data.progress?.total ?? progress.total);
+        if (data.progress) setProgress(data.progress);
+        return;
+      }
+      if (data.question) setQuestion(data.question);
+      if (data.section) setSection(data.section);
+      if (data.progress) {
+        setProgress(data.progress);
+        setAnsweredCount(data.progress.current - 1);
+      }
+      setSelectedAnswer(null);
+      setAllAnswered(false);
+
+      // Sync timer with server time
+      if (data.timeRemaining !== undefined) {
+        resetTimer(data.timeRemaining);
+        if (!timerReady) setTimerReady(true);
+      }
+    },
+    [progress.total, resetTimer, timerReady]
+  );
 
   // Fetch current question
   const fetchCurrentQuestion = useCallback(async () => {
@@ -75,12 +117,10 @@ export function ExamClient({
     try {
       const res = await fetch(`/api/v1/exam/attempt/${attemptId}/current`);
       if (res.status === 410) {
-        // Time expired — server already submitted
         router.push(`/exam/${accessLink}/result/${attemptId}`);
         return;
       }
       if (res.status === 403) {
-        // Attempt invalid or completed
         router.push(`/exam/${accessLink}/result/${attemptId}`);
         return;
       }
@@ -91,25 +131,13 @@ export function ExamClient({
       }
 
       const data = await res.json();
-
-      if (data.allAnswered) {
-        setAllAnswered(true);
-        setQuestion(null);
-        setLoading(false);
-        return;
-      }
-
-      setQuestion(data.question);
-      setSection(data.section);
-      setProgress(data.progress);
-      setSelectedAnswer(null);
-      setAllAnswered(false);
+      applyQuestionData(data);
     } catch {
       setError("Network error. Please check your connection.");
     } finally {
       setLoading(false);
     }
-  }, [attemptId, accessLink, router]);
+  }, [attemptId, accessLink, router, applyQuestionData]);
 
   // Load first question on mount
   useEffect(() => {
@@ -151,40 +179,15 @@ export function ExamClient({
         return;
       }
 
-      // Fetch the next question from the /current endpoint
-      await fetchCurrentQuestion();
-    } catch {
-      setError("Network error. Please try again.");
-    } finally {
-      setSubmitting(false);
-    }
-  }
+      const data = await res.json();
 
-  // Skip question
-  async function handleSkip() {
-    if (!question) return;
-    setSubmitting(true);
-    setError(null);
-    try {
-      const res = await fetch(`/api/v1/exam/attempt/${attemptId}/skip`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ questionId: question.id }),
-      });
-
-      if (res.status === 410) {
-        router.push(`/exam/${accessLink}/result/${attemptId}`);
-        return;
+      // Use inline next question data from answer API (avoids second fetch)
+      if (data.next) {
+        applyQuestionData(data.next);
+      } else {
+        // Fallback to fetching if API doesn't return inline data
+        await fetchCurrentQuestion();
       }
-      if (!res.ok) {
-        const data = await res.json();
-        setError(data.error || "Failed to skip question.");
-        setSubmitting(false);
-        return;
-      }
-
-      // Fetch the next question from the /current endpoint
-      await fetchCurrentQuestion();
     } catch {
       setError("Network error. Please try again.");
     } finally {
@@ -216,11 +219,48 @@ export function ExamClient({
 
   const progressPercent =
     progress.total > 0
-      ? Math.round(((progress.current - 1) / progress.total) * 100)
+      ? Math.round((answeredCount / progress.total) * 100)
       : 0;
 
   return (
     <>
+      {/* Instructions Modal */}
+      {showInstructions && !loading && question && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-card border border-border rounded-2xl shadow-2xl max-w-lg w-full p-6 md:p-8 space-y-6 animate-in fade-in zoom-in-95 duration-200">
+            <div className="text-center space-y-2">
+              <span className="material-symbols-outlined text-primary text-[48px]">info</span>
+              <h2 className="text-xl font-bold text-foreground">Exam Instructions</h2>
+            </div>
+            <ul className="space-y-3 text-sm text-muted-foreground">
+              <li className="flex items-start gap-3">
+                <span className="material-symbols-outlined text-primary text-[20px] mt-0.5 shrink-0">timer</span>
+                <span>You have <strong className="text-foreground">{examDurationMinutes} minutes</strong> to complete this exam. The timer will start when you begin.</span>
+              </li>
+              <li className="flex items-start gap-3">
+                <span className="material-symbols-outlined text-primary text-[20px] mt-0.5 shrink-0">quiz</span>
+                <span>There are <strong className="text-foreground">{totalQuestions} questions</strong> in total. Each question is saved automatically when you click Next.</span>
+              </li>
+              <li className="flex items-start gap-3">
+                <span className="material-symbols-outlined text-primary text-[20px] mt-0.5 shrink-0">block</span>
+                <span>You <strong className="text-foreground">cannot go back</strong> to previous questions once you move forward.</span>
+              </li>
+              <li className="flex items-start gap-3">
+                <span className="material-symbols-outlined text-primary text-[20px] mt-0.5 shrink-0">send</span>
+                <span>The exam will be <strong className="text-foreground">auto-submitted</strong> when the timer runs out.</span>
+              </li>
+            </ul>
+            <button
+              onClick={() => setShowInstructions(false)}
+              className="w-full flex items-center justify-center gap-2 rounded-lg h-11 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold transition-colors shadow-md shadow-primary/20"
+            >
+              Start Exam
+              <span className="material-symbols-outlined text-[20px]">arrow_forward</span>
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <header className="flex items-center justify-between whitespace-nowrap border-b border-solid border-border bg-card px-6 py-3 shrink-0 z-10 shadow-sm">
         <div className="flex items-center gap-4 text-foreground">
@@ -243,7 +283,7 @@ export function ExamClient({
           </div>
         </div>
         <div className="flex items-center gap-4">
-          <Timer formatted={formatted} seconds={seconds} />
+          <Timer formatted={formatted} seconds={seconds} timerReady={timerReady} />
 
           <AlertDialog>
             <AlertDialogTrigger asChild>
@@ -259,12 +299,12 @@ export function ExamClient({
                 <AlertDialogTitle>Submit Exam?</AlertDialogTitle>
                 <AlertDialogDescription>
                   Are you sure you want to submit your exam? You have answered{" "}
-                  {progress.current - 1} of {progress.total} questions.
-                  {progress.current - 1 < progress.total && (
+                  {answeredCount} of {progress.total} questions.
+                  {answeredCount < progress.total && (
                     <span className="block mt-2 text-amber-600 dark:text-amber-400 font-medium">
                       Warning: You have{" "}
-                      {progress.total - (progress.current - 1)} unanswered
-                      questions. They will be marked as skipped.
+                      {progress.total - answeredCount} unanswered
+                      questions. They will be marked as unanswered.
                     </span>
                   )}
                   <span className="block mt-2">
@@ -383,7 +423,7 @@ export function ExamClient({
                       </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
-                      <AlertDialogCancel>Review</AlertDialogCancel>
+                      <AlertDialogCancel>Continue Exam</AlertDialogCancel>
                       <AlertDialogAction
                         onClick={handleSubmitExam}
                         variant="destructive"
@@ -420,17 +460,7 @@ export function ExamClient({
                 )}
 
                 {/* Action Buttons */}
-                <div className="flex items-center justify-between mt-8 pt-6 border-t border-border">
-                  <button
-                    onClick={handleSkip}
-                    disabled={submitting}
-                    className="flex items-center gap-2 px-6 py-2.5 rounded-lg border border-border text-muted-foreground hover:bg-accent hover:text-foreground font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <span className="material-symbols-outlined text-[20px]">
-                      skip_next
-                    </span>
-                    Skip
-                  </button>
+                <div className="flex items-center justify-end mt-8 pt-6 border-t border-border">
                   <button
                     onClick={handleNext}
                     disabled={!selectedAnswer || submitting}

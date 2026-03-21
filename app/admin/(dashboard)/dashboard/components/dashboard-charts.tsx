@@ -1,26 +1,31 @@
 "use client"
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Bar, BarChart, CartesianGrid, XAxis, YAxis, PieChart, Pie, Cell } from "recharts"
-import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
+import { Bar, BarChart, CartesianGrid, XAxis, YAxis, PieChart, Pie, Cell, Legend, Tooltip } from "recharts"
+import { ChartContainer } from "@/components/ui/chart"
+
+// Bright multi-color palette for bar chart
+const BAR_COLORS = [
+  "#6366f1", // indigo
+  "#f59e0b", // amber
+  "#10b981", // emerald
+  "#ef4444", // red
+  "#3b82f6", // blue
+  "#a855f7", // purple
+  "#f97316", // orange
+]
+
+// Status → vivid color mapping for pie chart
+const STATUS_COLORS: Record<string, string> = {
+  Completed:   "#10b981", // emerald
+  "In Progress": "#3b82f6", // blue
+  Other:       "#f59e0b", // amber
+  Timed_Out:   "#ef4444", // red
+  "No Data":   "#94a3b8", // slate
+}
 
 const chartConfig = {
-  attempts: {
-    label: "Attempts",
-    color: "hsl(var(--primary))",
-  },
-  completed: {
-    label: "Completed",
-    color: "hsl(var(--chart-1))",
-  },
-  in_progress: {
-    label: "In Progress",
-    color: "hsl(var(--chart-2))",
-  },
-  other: {
-    label: "Other",
-    color: "hsl(var(--chart-3))",
-  },
+  attempts: { label: "Attempts", color: "#6366f1" },
 }
 
 export function DashboardCharts({ 
@@ -51,8 +56,21 @@ export function DashboardCharts({
                 }}
               />
               <YAxis tickLine={false} axisLine={false} tickMargin={8} allowDecimals={false} />
-              <ChartTooltip content={<ChartTooltipContent />} />
-              <Bar dataKey="attempts" fill="var(--color-attempts)" radius={[4, 4, 0, 0]} />
+              <Tooltip
+                cursor={{ fill: "hsl(var(--muted))", opacity: 0.5 }}
+                formatter={(value, name) => [value, "Attempts"]}
+                contentStyle={{
+                  background: "hsl(var(--card))",
+                  border: "1px solid hsl(var(--border))",
+                  borderRadius: "8px",
+                  fontSize: "12px",
+                }}
+              />
+              <Bar dataKey="attempts" radius={[6, 6, 0, 0]}>
+                {attemptsByDay.map((_, index) => (
+                  <Cell key={`bar-${index}`} fill={BAR_COLORS[index % BAR_COLORS.length]} />
+                ))}
+              </Bar>
             </BarChart>
           </ChartContainer>
         </CardContent>
@@ -63,21 +81,41 @@ export function DashboardCharts({
           <CardTitle className="text-base font-semibold text-muted-foreground uppercase tracking-wider">Overall Status</CardTitle>
         </CardHeader>
         <CardContent>
-          <ChartContainer config={chartConfig} className="min-h-[200px] sm:min-h-[260px] w-full flex justify-center">
+          <ChartContainer config={chartConfig} className="min-h-[200px] sm:min-h-[300px] w-full flex justify-center">
             <PieChart>
               <Pie
                 data={statusDistribution}
                 dataKey="value"
                 nameKey="status"
-                innerRadius={60}
-                outerRadius={80}
-                paddingAngle={2}
+                innerRadius={65}
+                outerRadius={100}
+                paddingAngle={3}
+                strokeWidth={2}
+                stroke="hsl(var(--background))"
               >
                 {statusDistribution.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={entry.fill} />
+                  <Cell
+                    key={`cell-${index}`}
+                    fill={STATUS_COLORS[entry.status] ?? BAR_COLORS[index % BAR_COLORS.length]}
+                  />
                 ))}
               </Pie>
-              <ChartTooltip content={<ChartTooltipContent hideLabel />} />
+              <Tooltip
+                formatter={(value, name) => [value, name]}
+                contentStyle={{
+                  background: "hsl(var(--card))",
+                  border: "1px solid hsl(var(--border))",
+                  borderRadius: "8px",
+                  fontSize: "12px",
+                }}
+              />
+              <Legend
+                iconType="circle"
+                iconSize={10}
+                formatter={(value) => (
+                  <span style={{ fontSize: "12px", color: "hsl(var(--foreground))" }}>{value}</span>
+                )}
+              />
             </PieChart>
           </ChartContainer>
         </CardContent>

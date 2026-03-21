@@ -14,7 +14,17 @@ export default async function ExamAttemptPage({
     where: { id: attemptId },
     include: {
       exam: {
-        select: { title: true, accessLink: true, durationMinutes: true },
+        select: {
+          title: true,
+          accessLink: true,
+          durationMinutes: true,
+          _count: { select: { sections: false } },
+          sections: {
+            select: {
+              _count: { select: { questions: true } },
+            },
+          },
+        },
       },
       candidate: { select: { fullName: true } },
     },
@@ -30,6 +40,11 @@ export default async function ExamAttemptPage({
 
   const timeRemaining = await getTimeRemaining(attemptId);
 
+  const totalQuestions = attempt.exam.sections.reduce(
+    (sum, s) => sum + s._count.questions,
+    0
+  );
+
   return (
     <ExamClient
       attemptId={attemptId}
@@ -37,6 +52,9 @@ export default async function ExamAttemptPage({
       examTitle={attempt.exam.title}
       candidateName={attempt.candidate.fullName}
       initialTimeRemaining={timeRemaining}
+      examDurationMinutes={attempt.exam.durationMinutes}
+      totalQuestions={totalQuestions}
     />
   );
 }
+

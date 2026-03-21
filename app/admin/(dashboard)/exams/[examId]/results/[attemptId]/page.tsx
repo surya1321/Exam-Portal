@@ -96,6 +96,7 @@ export default async function AttemptDetailPage({
     sec.scoreMax += Number(r.question.marks);
     sec.scoreEarned += Number(r.marksAwarded);
     if (!r.selectedAnswer) sec.unanswered++;
+    else if (r.question.questionType === "essay") { /* essays pending manual review */ }
     else if (r.isCorrect) sec.correct++;
     else sec.wrong++;
 
@@ -252,6 +253,154 @@ export default async function AttemptDetailPage({
         sections={sectionRows}
         passingPercentage={passingPercentage}
       />
+
+      {/* Detailed Score Interpretation */}
+      <Card className="mt-6">
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <Trophy className="h-4 w-4 text-muted-foreground" />
+            Detailed Score Interpretation
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-6">
+
+          {/* Performance Band */}
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">Performance Band</p>
+            <div className="relative">
+              {/* Band track */}
+              <div className="flex h-3 w-full overflow-hidden rounded-full">
+                <div className="flex-1 bg-red-400 dark:bg-red-600" />
+                <div className="flex-1 bg-amber-400 dark:bg-amber-500" />
+                <div className="flex-1 bg-blue-400 dark:bg-blue-500" />
+                <div className="flex-1 bg-emerald-400 dark:bg-emerald-500" />
+              </div>
+              {/* Score marker */}
+              <div
+                className="absolute top-0 flex flex-col items-center -translate-x-1/2"
+                style={{ left: `${Math.min(Math.max(percentage, 0), 100)}%` }}
+              >
+                <div className="w-0.5 h-3 bg-foreground rounded-full" />
+                <div className="mt-1 bg-foreground text-background text-[10px] font-bold px-1.5 py-0.5 rounded whitespace-nowrap">
+                  {percentage.toFixed(1)}%
+                </div>
+              </div>
+              {/* Band labels */}
+              <div className="flex justify-between mt-6 text-[10px] text-muted-foreground">
+                <span>0 — Fail</span>
+                <span>{passingPercentage}% — Pass</span>
+                <span>75% — Good</span>
+                <span>90% — Excellent</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Key Metrics Grid */}
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">Key Metrics</p>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="rounded-lg border bg-card p-3 text-center">
+                <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">{totalCorrect}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Correct</p>
+              </div>
+              <div className="rounded-lg border bg-card p-3 text-center">
+                <p className="text-2xl font-bold text-red-600 dark:text-red-400">{totalWrong}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Wrong</p>
+              </div>
+              <div className="rounded-lg border bg-card p-3 text-center">
+                <p className="text-2xl font-bold text-slate-500 dark:text-slate-400">{totalUnanswered}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Unanswered</p>
+              </div>
+              <div className="rounded-lg border bg-card p-3 text-center">
+                <p className="text-2xl font-bold">
+                  {totalCorrect + totalWrong + totalUnanswered > 0
+                    ? `${Math.round((totalCorrect / (totalCorrect + totalWrong + totalUnanswered)) * 100)}%`
+                    : "—"}
+                </p>
+                <p className="text-xs text-muted-foreground mt-0.5">Accuracy</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Strengths & Weaknesses */}
+          {sectionRows.length > 0 && (
+            <div className="grid sm:grid-cols-2 gap-4">
+              {/* Strong sections */}
+              {sectionRows.filter(s => s.scoreMax > 0 && (s.scoreEarned / s.scoreMax) * 100 >= passingPercentage).length > 0 && (
+                <div className="rounded-lg border border-emerald-200 dark:border-emerald-800 bg-emerald-50/50 dark:bg-emerald-950/20 p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-emerald-700 dark:text-emerald-400 mb-2 flex items-center gap-1.5">
+                    <CheckCircle2 className="h-3.5 w-3.5" /> Strong Sections
+                  </p>
+                  <ul className="space-y-2">
+                    {sectionRows
+                      .filter(s => s.scoreMax > 0 && (s.scoreEarned / s.scoreMax) * 100 >= passingPercentage)
+                      .sort((a, b) => (b.scoreEarned / b.scoreMax) - (a.scoreEarned / a.scoreMax))
+                      .map(s => {
+                        const pct = Math.round((s.scoreEarned / s.scoreMax) * 100);
+                        return (
+                          <li key={s.id} className="flex items-center justify-between text-sm">
+                            <span className="text-foreground truncate max-w-[150px]">{s.title}</span>
+                            <span className="font-semibold text-emerald-600 dark:text-emerald-400 shrink-0 ml-2">{pct}%</span>
+                          </li>
+                        );
+                      })}
+                  </ul>
+                </div>
+              )}
+
+              {/* Weak sections */}
+              {sectionRows.filter(s => s.scoreMax > 0 && (s.scoreEarned / s.scoreMax) * 100 < passingPercentage).length > 0 && (
+                <div className="rounded-lg border border-red-200 dark:border-red-800 bg-red-50/50 dark:bg-red-950/20 p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-red-700 dark:text-red-400 mb-2 flex items-center gap-1.5">
+                    <XCircle className="h-3.5 w-3.5" /> Weak Sections
+                  </p>
+                  <ul className="space-y-2">
+                    {sectionRows
+                      .filter(s => s.scoreMax > 0 && (s.scoreEarned / s.scoreMax) * 100 < passingPercentage)
+                      .sort((a, b) => (a.scoreEarned / a.scoreMax) - (b.scoreEarned / b.scoreMax))
+                      .map(s => {
+                        const pct = Math.round((s.scoreEarned / s.scoreMax) * 100);
+                        return (
+                          <li key={s.id} className="flex items-center justify-between text-sm">
+                            <span className="text-foreground truncate max-w-[150px]">{s.title}</span>
+                            <span className="font-semibold text-red-600 dark:text-red-400 shrink-0 ml-2">{pct}%</span>
+                          </li>
+                        );
+                      })}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Recommendation */}
+          <div className={`rounded-lg p-4 text-sm ${
+            passed
+              ? "bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800"
+              : "bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800"
+          }`}>
+            <p className={`font-semibold mb-1 ${passed ? "text-emerald-700 dark:text-emerald-400" : "text-red-700 dark:text-red-400"}`}>
+              {percentage >= 90
+                ? "🎯 Recommendation: Outstanding — Highly Recommended"
+                : percentage >= 75
+                  ? "✅ Recommendation: Passed — Good Candidate"
+                  : percentage >= passingPercentage
+                    ? "⚠️ Recommendation: Passed — Marginal Performance"
+                    : "❌ Recommendation: Did Not Meet Requirements"}
+            </p>
+            <p className={`text-xs leading-relaxed ${passed ? "text-emerald-600/80 dark:text-emerald-300/70" : "text-red-600/80 dark:text-red-300/70"}`}>
+              {percentage >= 90
+                ? `Scored ${percentage.toFixed(1)}% — ${totalScore} out of ${totalMarks} marks. Demonstrates exceptional mastery. This candidate is an excellent fit and stands out significantly among peers.`
+                : percentage >= 75
+                  ? `Scored ${percentage.toFixed(1)}% — ${totalScore} out of ${totalMarks} marks. Shows solid knowledge with only minor gaps. Recommended for selection with confidence.`
+                  : percentage >= passingPercentage
+                    ? `Scored ${percentage.toFixed(1)}% — ${totalScore} out of ${totalMarks} marks. Narrowly meets the ${passingPercentage}% threshold. Consider reviewing weak sections before finalizing a decision.`
+                    : `Scored ${percentage.toFixed(1)}% — ${totalScore} out of ${totalMarks} marks. Did not meet the passing threshold of ${passingPercentage}%. The candidate may benefit from further preparation and re-assessment.`}
+            </p>
+          </div>
+
+        </CardContent>
+      </Card>
 
       {/* Footer */}
       <div className="mt-6 text-center">

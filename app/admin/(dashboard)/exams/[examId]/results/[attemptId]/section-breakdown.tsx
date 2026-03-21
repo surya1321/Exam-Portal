@@ -8,6 +8,7 @@ import {
   XCircle,
   MinusCircle,
   LayoutList,
+  PenLine,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -201,6 +202,8 @@ export function SectionBreakdown({
                           <TableCell className="text-center">
                             {isUnanswered ? (
                               <MinusCircle className="mx-auto h-4 w-4 text-slate-400" />
+                            ) : q.questionType === "essay" ? (
+                              <PenLine className="mx-auto h-4 w-4 text-amber-500" />
                             ) : q.isCorrect ? (
                               <CheckCircle2 className="mx-auto h-4 w-4 text-emerald-500" />
                             ) : (
@@ -216,24 +219,41 @@ export function SectionBreakdown({
                                 : "text-xs"
                             }
                           >
-                            <span className="block">
-                              <span className="text-muted-foreground">
-                                Ans:{" "}
-                              </span>
-                              {getAnswerText(q.selectedAnswer, q.options)}
-                            </span>
-                            {!q.isCorrect && !isUnanswered && (
-                              <span className="block text-emerald-600 dark:text-emerald-400">
-                                <span className="text-muted-foreground">
-                                  Correct:{" "}
+                            {q.questionType === "essay" && q.selectedAnswer ? (
+                              <span className="block">
+                                <Badge variant="outline" className="text-amber-600 dark:text-amber-400 border-amber-300 dark:border-amber-700">
+                                  Pending Manual Review
+                                </Badge>
+                                <span className="block mt-1 text-muted-foreground line-clamp-2">
+                                  {q.selectedAnswer.slice(0, 150)}{q.selectedAnswer.length > 150 ? "..." : ""}
                                 </span>
-                                {getAnswerText(q.correctAnswer, q.options)}
                               </span>
+                            ) : (
+                              <>
+                                <span className="block">
+                                  <span className="text-muted-foreground">
+                                    Ans:{" "}
+                                  </span>
+                                  {getAnswerText(q.selectedAnswer, q.options)}
+                                </span>
+                                {!q.isCorrect && !isUnanswered && (
+                                  <span className="block text-emerald-600 dark:text-emerald-400">
+                                    <span className="text-muted-foreground">
+                                      Correct:{" "}
+                                    </span>
+                                    {getAnswerText(q.correctAnswer, q.options)}
+                                  </span>
+                                )}
+                              </>
                             )}
                           </TableCell>
                           {/* Marks */}
                           <TableCell className="text-right font-medium">
-                            {q.marksAwarded} / {q.marks}
+                            {q.questionType === "essay" ? (
+                              <span className="text-amber-600 dark:text-amber-400">Pending</span>
+                            ) : (
+                              <>{q.marksAwarded} / {q.marks}</>
+                            )}
                           </TableCell>
                           {/* Time */}
                           <TableCell className="text-right text-muted-foreground text-xs">
