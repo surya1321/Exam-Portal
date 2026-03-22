@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getVerifiedCandidateSession } from "@/lib/session";
+import { rateLimit } from "@/lib/rate-limit";
 import {
   getTimeRemaining,
   isAttemptExpired,
@@ -18,6 +19,11 @@ export async function GET(
   const session = await getVerifiedCandidateSession(attemptId);
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const { allowed } = rateLimit(`current:${attemptId}`, 20);
+  if (!allowed) {
+    return NextResponse.json({ error: "Too many requests" }, { status: 429 });
   }
 
   const attempt = await prisma.examAttempt.findUnique({
@@ -38,6 +44,18 @@ export async function GET(
     await computeAndSubmitAttempt(attemptId);
     return NextResponse.json(
       { error: "Time expired", status: "timed_out" },
+      { status: 410 }
+    );
+  }
+
+  const examWindow = await prisma.exam.findUnique({
+    where: { id: attempt.examId },
+    select: { expiresAt: true },
+  });
+  if (examWindow?.expiresAt && new Date() > examWindow.expiresAt) {
+    await computeAndSubmitAttempt(attemptId);
+    return NextResponse.json(
+      { error: "Exam window has expired", status: "expired" },
       { status: 410 }
     );
   }

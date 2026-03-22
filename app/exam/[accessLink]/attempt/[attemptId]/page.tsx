@@ -18,6 +18,7 @@ export default async function ExamAttemptPage({
           title: true,
           accessLink: true,
           durationMinutes: true,
+          expiresAt: true,
           sections: {
             orderBy: { orderIndex: "asc" },
             select: {
@@ -37,6 +38,13 @@ export default async function ExamAttemptPage({
 
   // If already completed, redirect to results
   if (attempt.status !== "in_progress") {
+    redirect(`/exam/${accessLink}/result/${attemptId}`);
+  }
+
+  // If exam window has expired, auto-submit
+  if (attempt.exam.expiresAt && new Date() > attempt.exam.expiresAt) {
+    const { computeAndSubmitAttempt } = await import("@/lib/exam-engine");
+    await computeAndSubmitAttempt(attemptId);
     redirect(`/exam/${accessLink}/result/${attemptId}`);
   }
 

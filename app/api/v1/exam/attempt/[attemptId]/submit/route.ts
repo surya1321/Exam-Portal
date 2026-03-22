@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getVerifiedCandidateSession } from "@/lib/session";
+import { rateLimit } from "@/lib/rate-limit";
 import { computeAndSubmitAttempt } from "@/lib/exam-engine";
 
 export async function POST(
@@ -14,15 +15,32 @@ export async function POST(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const { allowed } = rateLimit(`submit:${attemptId}`, 5);
+  if (!allowed) {
+    return NextResponse.json({ error: "Too many requests" }, { status: 429 });
+  }
+
   const attempt = await prisma.examAttempt.findUnique({
     where: { id: attemptId },
-    select: { status: true },
+    select: { status: true, examId: true },
   });
   if (!attempt) {
     return NextResponse.json({ error: "Attempt not found" }, { status: 404 });
   }
   if (attempt.status !== "in_progress") {
     return NextResponse.json({ error: "Attempt already completed" }, { status: 409 });
+  }
+
+  const examWindow = await prisma.exam.findUnique({
+    where: { id: attempt.examId },
+    select: { expiresAt: true },
+  });
+  if (examWindow?.expiresAt && new Date() > examWindow.expiresAt) {
+    await computeAndSubmitAttempt(attemptId);
+    return NextResponse.json(
+      { error: "Exam window has expired", status: "expired" },
+      { status: 410 }
+    );
   }
 
   try {

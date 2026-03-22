@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { useExamTimer } from "@/hooks/use-exam-timer";
+import { useProctoring } from "@/hooks/use-proctoring";
 import { Timer } from "./timer";
 import { QuestionDisplay } from "./question-display";
 import { CameraProctor } from "./camera-proctor";
@@ -53,8 +54,6 @@ type ExamClientProps = {
   examSections: ExamSection[];
 };
 
-type PermissionStatus = "idle" | "requesting" | "granted" | "denied" | "error";
-
 export function ExamClient({
   attemptId,
   accessLink,
@@ -66,20 +65,91 @@ export function ExamClient({
   examSections,
 }: ExamClientProps) {
   const router = useRouter();
-  const { seconds, formatted, isExpired, reset: resetTimer } = useExamTimer(
-    attemptId,
-    initialTimeRemaining,
-    true
-  );
 
   // ── Stage ─────────────────────────────────────────────────────────────
   // "instructions" | "permissions" | "exam"
   const [stage, setStage] = useState<"instructions" | "permissions" | "exam">("instructions");
 
-  // ── Permission state ───────────────────────────────────────────────────
-  const [cameraStatus, setCameraStatus] = useState<PermissionStatus>("idle");
-  const [micStatus, setMicStatus] = useState<PermissionStatus>("idle");
-  const permStreamRef = useRef<MediaStream | null>(null);
+  // ── Proctoring ─────────────────────────────────────────────────────────
+  const proctoring = useProctoring(stage === "exam");
+
+  // ── Resume on reload ───────────────────────────────────────────────────
+  // If the candidate previously reached the exam stage, skip instructions
+  // and permissions on reload by auto-requesting permissions and advancing.
+  const isResumeRef = useRef(false);
+  const sessionKey = `exam-started:${attemptId}`;
+
+  useEffect(() => {
+    if (sessionStorage.getItem(sessionKey)) {
+      // Validate the attempt is still in_progress before resuming
+      fetch(`/api/v1/exam/attempt/${attemptId}/timer`)
+        .then((res) => {
+          if (res.ok) {
+            isResumeRef.current = true;
+            setStage("permissions");
+            proctoring.requestPermissions();
+          } else {
+            // Attempt no longer active — clear stale session
+            sessionStorage.removeItem(sessionKey);
+            router.push(`/exam/${accessLink}/result/${attemptId}`);
+          }
+        })
+        .catch(() => {
+          // Network error — still try to resume
+          isResumeRef.current = true;
+          setStage("permissions");
+          proctoring.requestPermissions();
+        });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // When permissions become ready during a resume, auto-advance to exam
+  useEffect(() => {
+    if (isResumeRef.current && proctoring.isReady && stage === "permissions") {
+      setStage("exam");
+    }
+  }, [proctoring.isReady, stage]);
+
+  const { seconds, formatted, isExpired, reset: resetTimer } = useExamTimer(
+    attemptId,
+    initialTimeRemaining,
+    true,
+    proctoring.isPaused
+  );
+
+  // Apply body-level copy prevention during exam
+  useEffect(() => {
+    if (stage !== "exam") return;
+    document.body.style.userSelect = "none";
+    document.body.style.webkitUserSelect = "none";
+    return () => {
+      document.body.style.userSelect = "";
+      document.body.style.webkitUserSelect = "";
+    };
+  }, [stage]);
+
+  // Prevent accidental navigation (back button + tab close)
+  useEffect(() => {
+    if (stage !== "exam") return;
+
+    function handleBeforeUnload(e: BeforeUnloadEvent) {
+      e.preventDefault();
+    }
+
+    // Push a dummy state to trap the back button
+    window.history.pushState(null, "", window.location.href);
+    function handlePopState() {
+      window.history.pushState(null, "", window.location.href);
+    }
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    window.addEventListener("popstate", handlePopState);
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+      window.removeEventListener("popstate", handlePopState);
+    };
+  }, [stage]);
 
   // ── Exam state ─────────────────────────────────────────────────────────
   const [question, setQuestion] = useState<Question | null>(null);
@@ -130,8 +200,12 @@ export function ExamClient({
     setError(null);
     try {
       const res = await fetch(`/api/v1/exam/attempt/${attemptId}/current`);
-      if (res.status === 410 || res.status === 403) {
+      if (res.status === 410 || res.status === 403 || res.status === 409) {
         router.push(`/exam/${accessLink}/result/${attemptId}`);
+        return;
+      }
+      if (res.status === 401) {
+        router.push(`/exam/${accessLink}/login`);
         return;
       }
       if (!res.ok) {
@@ -160,6 +234,23 @@ export function ExamClient({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isExpired]);
 
+  // Auto-submit when proctoring violations hit the limit
+  useEffect(() => {
+    if (proctoring.isAutoSubmitted && !submittingRef.current) {
+      submittingRef.current = true;
+      handleSubmitExam();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [proctoring.isAutoSubmitted]);
+
+  // Auto-dismiss violation warning after 3 seconds
+  useEffect(() => {
+    if (proctoring.latestViolation) {
+      const timer = setTimeout(() => proctoring.dismissViolation(), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [proctoring.latestViolation, proctoring.dismissViolation]);
+
   async function handleNext() {
     if (!question || !selectedAnswer) return;
     setSubmitting(true);
@@ -170,7 +261,7 @@ export function ExamClient({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ questionId: question.id, selectedAnswer }),
       });
-      if (res.status === 410) {
+      if (res.status === 410 || res.status === 409) {
         router.push(`/exam/${accessLink}/result/${attemptId}`);
         return;
       }
@@ -193,7 +284,36 @@ export function ExamClient({
     }
   }
 
-  async function handleSubmitExam() {
+  async function handleSkip() {
+    if (!question) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/v1/exam/attempt/${attemptId}/skip`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ questionId: question.id }),
+      });
+      if (res.status === 410 || res.status === 409) {
+        router.push(`/exam/${accessLink}/result/${attemptId}`);
+        return;
+      }
+      if (!res.ok) {
+        const data = await res.json();
+        setError(data.error || "Failed to skip question.");
+        setSubmitting(false);
+        return;
+      }
+      await fetchCurrentQuestion();
+    } catch {
+      setError("Network error. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handleSubmitExam(retryCount = 0) {
+    sessionStorage.removeItem(sessionKey);
     submittingRef.current = true;
     setSubmitting(true);
     try {
@@ -201,63 +321,25 @@ export function ExamClient({
         method: "POST",
         headers: { "Content-Type": "application/json" },
       });
-      if (res.ok || res.status === 403) {
+      if (res.ok || res.status === 403 || res.status === 409) {
+        proctoring.cleanup();
         router.push(`/exam/${accessLink}/result/${attemptId}`);
+      } else if (retryCount < 3) {
+        const delay = Math.min(1000 * 2 ** retryCount, 8000);
+        setTimeout(() => handleSubmitExam(retryCount + 1), delay);
       } else {
         setError("Failed to submit exam. Please try again.");
         setSubmitting(false);
+        submittingRef.current = false;
       }
     } catch {
-      setError("Network error. Please try again.");
-      setSubmitting(false);
-    }
-  }
-
-  // ── Permission request ─────────────────────────────────────────────────
-  async function requestPermissions() {
-    setCameraStatus("requesting");
-    setMicStatus("requesting");
-
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "user" },
-        audio: true,
-      });
-
-      // Verify both track types are present
-      const hasVideo = stream.getVideoTracks().length > 0;
-      const hasAudio = stream.getAudioTracks().length > 0;
-
-      if (hasVideo) setCameraStatus("granted");
-      else setCameraStatus("denied");
-
-      if (hasAudio) setMicStatus("granted");
-      else setMicStatus("denied");
-
-      if (hasVideo && hasAudio) {
-        // Keep stream open — CameraProctor will open its own, release this one
-        stream.getTracks().forEach((t) => t.stop());
-        permStreamRef.current = null;
-        // Proceed to exam
-        setStage("exam");
+      if (retryCount < 3) {
+        const delay = Math.min(1000 * 2 ** retryCount, 8000);
+        setTimeout(() => handleSubmitExam(retryCount + 1), delay);
       } else {
-        stream.getTracks().forEach((t) => t.stop());
-      }
-    } catch (err: unknown) {
-      const error = err as { name?: string };
-      if (
-        error?.name === "NotAllowedError" ||
-        error?.name === "PermissionDeniedError"
-      ) {
-        setCameraStatus("denied");
-        setMicStatus("denied");
-      } else if (error?.name === "NotFoundError") {
-        // Device not found
-        setCameraStatus("error");
-        setMicStatus("error");
-      } else {
-        setCameraStatus("error");
-        setMicStatus("error");
+        setError("Network error. Please try again.");
+        setSubmitting(false);
+        submittingRef.current = false;
       }
     }
   }
@@ -265,12 +347,12 @@ export function ExamClient({
   const progressPercent =
     progress.total > 0 ? Math.round((answeredCount / progress.total) * 100) : 0;
 
-  const bothGranted = cameraStatus === "granted" && micStatus === "granted";
+  const bothGranted = proctoring.isReady;
   const anyDenied =
-    cameraStatus === "denied" ||
-    micStatus === "denied" ||
-    cameraStatus === "error" ||
-    micStatus === "error";
+    proctoring.cameraStatus === "denied" ||
+    proctoring.micStatus === "denied" ||
+    proctoring.cameraStatus === "error" ||
+    proctoring.micStatus === "error";
 
   // ── INSTRUCTIONS PAGE ─────────────────────────────────────────────────
   if (stage === "instructions") {
@@ -376,6 +458,18 @@ export function ExamClient({
                     <strong className="text-foreground">Camera and microphone are mandatory.</strong> You will be prompted to allow access before the exam begins.
                   </span>
                 </li>
+                <li className="flex items-start gap-4 px-5 py-4">
+                  <span className="material-symbols-outlined text-red-500 text-[20px] mt-0.5 shrink-0">content_copy</span>
+                  <span className="text-sm text-muted-foreground">
+                    <strong className="text-foreground">Copying, pasting, and right-clicking are disabled</strong> during the exam.
+                  </span>
+                </li>
+                <li className="flex items-start gap-4 px-5 py-4">
+                  <span className="material-symbols-outlined text-red-500 text-[20px] mt-0.5 shrink-0">tab</span>
+                  <span className="text-sm text-muted-foreground">
+                    <strong className="text-foreground">Switching tabs or windows is monitored.</strong> After 3 violations, your exam will be auto-submitted.
+                  </span>
+                </li>
               </ul>
             </div>
 
@@ -432,90 +526,90 @@ export function ExamClient({
             <div className="space-y-3">
               {/* Camera */}
               <div className={`flex items-center gap-4 rounded-xl border p-4 transition-colors ${
-                cameraStatus === "granted"
+                proctoring.cameraStatus === "granted"
                   ? "border-green-500/40 bg-green-500/5"
-                  : cameraStatus === "denied" || cameraStatus === "error"
+                  : proctoring.cameraStatus === "denied" || proctoring.cameraStatus === "error"
                   ? "border-red-500/40 bg-red-500/5"
-                  : cameraStatus === "requesting"
+                  : proctoring.cameraStatus === "requesting"
                   ? "border-primary/40 bg-primary/5"
                   : "border-border bg-card"
               }`}>
                 <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
-                  cameraStatus === "granted" ? "bg-green-500/10" :
-                  cameraStatus === "denied" || cameraStatus === "error" ? "bg-red-500/10" :
-                  cameraStatus === "requesting" ? "bg-primary/10" : "bg-muted"
+                  proctoring.cameraStatus === "granted" ? "bg-green-500/10" :
+                  proctoring.cameraStatus === "denied" || proctoring.cameraStatus === "error" ? "bg-red-500/10" :
+                  proctoring.cameraStatus === "requesting" ? "bg-primary/10" : "bg-muted"
                 }`}>
-                  {cameraStatus === "requesting" ? (
+                  {proctoring.cameraStatus === "requesting" ? (
                     <div className="h-5 w-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
                   ) : (
                     <span className={`material-symbols-outlined text-[22px] ${
-                      cameraStatus === "granted" ? "text-green-500" :
-                      cameraStatus === "denied" || cameraStatus === "error" ? "text-red-500" :
+                      proctoring.cameraStatus === "granted" ? "text-green-500" :
+                      proctoring.cameraStatus === "denied" || proctoring.cameraStatus === "error" ? "text-red-500" :
                       "text-muted-foreground"
                     }`}>
-                      {cameraStatus === "denied" || cameraStatus === "error" ? "videocam_off" : "videocam"}
+                      {proctoring.cameraStatus === "denied" || proctoring.cameraStatus === "error" ? "videocam_off" : "videocam"}
                     </span>
                   )}
                 </div>
                 <div className="flex-1">
                   <p className="font-medium text-sm text-foreground">Camera</p>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    {cameraStatus === "idle" && "Required for video proctoring"}
-                    {cameraStatus === "requesting" && "Waiting for permission..."}
-                    {cameraStatus === "granted" && "Camera access granted"}
-                    {cameraStatus === "denied" && "Camera access denied — please allow in browser settings"}
-                    {cameraStatus === "error" && "Camera not found or unavailable"}
+                    {proctoring.cameraStatus === "idle" && "Required for video proctoring"}
+                    {proctoring.cameraStatus === "requesting" && "Waiting for permission..."}
+                    {proctoring.cameraStatus === "granted" && "Camera access granted"}
+                    {proctoring.cameraStatus === "denied" && "Camera access denied — please allow in browser settings"}
+                    {proctoring.cameraStatus === "error" && "Camera not found or unavailable"}
                   </p>
                 </div>
-                {cameraStatus === "granted" && (
+                {proctoring.cameraStatus === "granted" && (
                   <span className="material-symbols-outlined text-green-500 text-[22px] shrink-0">check_circle</span>
                 )}
-                {(cameraStatus === "denied" || cameraStatus === "error") && (
+                {(proctoring.cameraStatus === "denied" || proctoring.cameraStatus === "error") && (
                   <span className="material-symbols-outlined text-red-500 text-[22px] shrink-0">cancel</span>
                 )}
               </div>
 
               {/* Microphone */}
               <div className={`flex items-center gap-4 rounded-xl border p-4 transition-colors ${
-                micStatus === "granted"
+                proctoring.micStatus === "granted"
                   ? "border-green-500/40 bg-green-500/5"
-                  : micStatus === "denied" || micStatus === "error"
+                  : proctoring.micStatus === "denied" || proctoring.micStatus === "error"
                   ? "border-red-500/40 bg-red-500/5"
-                  : micStatus === "requesting"
+                  : proctoring.micStatus === "requesting"
                   ? "border-primary/40 bg-primary/5"
                   : "border-border bg-card"
               }`}>
                 <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
-                  micStatus === "granted" ? "bg-green-500/10" :
-                  micStatus === "denied" || micStatus === "error" ? "bg-red-500/10" :
-                  micStatus === "requesting" ? "bg-primary/10" : "bg-muted"
+                  proctoring.micStatus === "granted" ? "bg-green-500/10" :
+                  proctoring.micStatus === "denied" || proctoring.micStatus === "error" ? "bg-red-500/10" :
+                  proctoring.micStatus === "requesting" ? "bg-primary/10" : "bg-muted"
                 }`}>
-                  {micStatus === "requesting" ? (
+                  {proctoring.micStatus === "requesting" ? (
                     <div className="h-5 w-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
                   ) : (
                     <span className={`material-symbols-outlined text-[22px] ${
-                      micStatus === "granted" ? "text-green-500" :
-                      micStatus === "denied" || micStatus === "error" ? "text-red-500" :
+                      proctoring.micStatus === "granted" ? "text-green-500" :
+                      proctoring.micStatus === "denied" || proctoring.micStatus === "error" ? "text-red-500" :
                       "text-muted-foreground"
                     }`}>
-                      {micStatus === "denied" || micStatus === "error" ? "mic_off" : "mic"}
+                      {proctoring.micStatus === "denied" || proctoring.micStatus === "error" ? "mic_off" : "mic"}
                     </span>
                   )}
                 </div>
                 <div className="flex-1">
                   <p className="font-medium text-sm text-foreground">Microphone</p>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    {micStatus === "idle" && "Required for audio proctoring"}
-                    {micStatus === "requesting" && "Waiting for permission..."}
-                    {micStatus === "granted" && "Microphone access granted"}
-                    {micStatus === "denied" && "Microphone access denied — please allow in browser settings"}
-                    {micStatus === "error" && "Microphone not found or unavailable"}
+                    {proctoring.micStatus === "idle" && "Required for audio proctoring"}
+                    {proctoring.micStatus === "requesting" && "Waiting for permission..."}
+                    {proctoring.micStatus === "granted" && "Microphone access granted"}
+                    {proctoring.micStatus === "denied" && "Microphone access denied — please allow in browser settings"}
+                    {proctoring.micStatus === "error" && "Microphone not found or unavailable"}
                   </p>
                 </div>
-                {micStatus === "granted" && (
+                {proctoring.micStatus === "granted" && (
                   <span className="material-symbols-outlined text-green-500 text-[22px] shrink-0">check_circle</span>
                 )}
-                {(micStatus === "denied" || micStatus === "error") && (
+                {(proctoring.micStatus === "denied" || proctoring.micStatus === "error") && (
                   <span className="material-symbols-outlined text-red-500 text-[22px] shrink-0">cancel</span>
                 )}
               </div>
@@ -535,11 +629,11 @@ export function ExamClient({
             <div className="space-y-3">
               {!bothGranted && (
                 <button
-                  onClick={requestPermissions}
-                  disabled={cameraStatus === "requesting"}
+                  onClick={proctoring.requestPermissions}
+                  disabled={proctoring.cameraStatus === "requesting"}
                   className="w-full flex items-center justify-center gap-2 rounded-xl py-3.5 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold transition-colors shadow-md shadow-primary/20 text-base disabled:opacity-60 disabled:cursor-not-allowed"
                 >
-                  {cameraStatus === "requesting" ? (
+                  {proctoring.cameraStatus === "requesting" ? (
                     <>
                       <div className="h-4 w-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
                       Waiting for permissions...
@@ -560,7 +654,10 @@ export function ExamClient({
 
               {bothGranted && (
                 <button
-                  onClick={() => setStage("exam")}
+                  onClick={() => {
+                    sessionStorage.setItem(sessionKey, "1");
+                    setStage("exam");
+                  }}
                   className="w-full flex items-center justify-center gap-2 rounded-xl py-3.5 bg-green-600 hover:bg-green-600/90 text-white font-semibold transition-colors shadow-md text-base"
                 >
                   <span className="material-symbols-outlined text-[22px]">play_arrow</span>
@@ -583,8 +680,69 @@ export function ExamClient({
 
   // ── EXAM UI ───────────────────────────────────────────────────────────
   return (
-    <>
-      <CameraProctor />
+    <div
+      className="flex flex-col min-h-screen select-none"
+      onCopy={(e) => e.preventDefault()}
+      onCut={(e) => e.preventDefault()}
+      onPaste={(e) => e.preventDefault()}
+      onContextMenu={(e) => e.preventDefault()}
+    >
+      <CameraProctor mediaStream={proctoring.mediaStream} />
+
+      {/* Proctoring pause overlay */}
+      {proctoring.isPaused && stage === "exam" && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
+          <div className="max-w-md w-full mx-4 bg-card rounded-2xl border border-border p-8 text-center space-y-6 shadow-2xl">
+            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-red-500/10 mx-auto">
+              <span className="material-symbols-outlined text-red-500 text-[36px]">videocam_off</span>
+            </div>
+            <div>
+              <h2 className="text-xl font-bold text-foreground">Exam Paused</h2>
+              <p className="text-sm text-muted-foreground mt-2">
+                Your camera or microphone has been disconnected. The timer is paused.
+                Please re-enable both to continue your exam.
+              </p>
+            </div>
+            <button
+              onClick={proctoring.retryPermissions}
+              className="w-full flex items-center justify-center gap-2 rounded-xl py-3 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold transition-colors"
+            >
+              <span className="material-symbols-outlined text-[20px]">videocam</span>
+              Re-enable Camera &amp; Microphone
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Tab-switch violation warning */}
+      {proctoring.latestViolation && !proctoring.isPaused && stage === "exam" && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="max-w-sm w-full mx-4 bg-card rounded-2xl border border-amber-500/30 p-8 text-center space-y-4 shadow-2xl">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-500/10 mx-auto">
+              <span className="material-symbols-outlined text-amber-500 text-[32px]">warning</span>
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-foreground">
+                Warning {proctoring.violations.total} of 3
+              </h2>
+              <p className="text-sm text-muted-foreground mt-2">
+                {proctoring.latestViolation}
+              </p>
+              {proctoring.violations.total >= 2 && (
+                <p className="text-xs text-red-500 font-medium mt-2">
+                  Next violation will auto-submit your exam.
+                </p>
+              )}
+            </div>
+            <button
+              onClick={proctoring.dismissViolation}
+              className="w-full rounded-xl py-2.5 bg-amber-500 hover:bg-amber-600 text-white font-semibold transition-colors text-sm"
+            >
+              I Understand
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Header */}
       <header className="flex items-center justify-between whitespace-nowrap border-b border-solid border-border bg-card px-6 py-3 shrink-0 z-10 shadow-sm">
@@ -622,7 +780,7 @@ export function ExamClient({
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
-                <AlertDialogAction onClick={handleSubmitExam} variant="destructive">
+                <AlertDialogAction onClick={() => handleSubmitExam()} variant="destructive">
                   Submit Exam
                 </AlertDialogAction>
               </AlertDialogFooter>
@@ -701,7 +859,7 @@ export function ExamClient({
                       </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
-                      <AlertDialogAction onClick={handleSubmitExam} variant="destructive">
+                      <AlertDialogAction onClick={() => handleSubmitExam()} variant="destructive">
                         Submit Exam
                       </AlertDialogAction>
                     </AlertDialogFooter>
@@ -730,7 +888,15 @@ export function ExamClient({
                     />
                   </div>
                 )}
-                <div className="flex items-center justify-end mt-8 pt-6 border-t border-border">
+                <div className="flex items-center justify-between mt-8 pt-6 border-t border-border">
+                  <button
+                    onClick={handleSkip}
+                    disabled={submitting}
+                    className="flex items-center gap-2 px-6 py-2.5 rounded-lg border border-border bg-background hover:bg-muted text-muted-foreground font-medium transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+                  >
+                    <span className="material-symbols-outlined text-[18px]">skip_next</span>
+                    Skip
+                  </button>
                   <button
                     onClick={handleNext}
                     disabled={!selectedAnswer || submitting}
@@ -759,6 +925,6 @@ export function ExamClient({
           </div>
         </div>
       </main>
-    </>
+    </div>
   );
 }
