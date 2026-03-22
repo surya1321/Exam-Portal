@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "skills": {
+    "next-browser": {
+      "source": "vercel-labs/next-browser",
+      "sourceType": "github",
+      "computedHash": "bc3fd205d0b7739c92811ba6475ed6a7fe0fae1169fcce008518bccc12da5646"
+    }
+  }
+}

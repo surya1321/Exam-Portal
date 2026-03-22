@@ -1,5 +1,6 @@
 "use client";
 
+import { useParams, useRouter } from "next/navigation";
 import { AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -10,6 +11,9 @@ export default function AttemptError({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  const router = useRouter();
+  const params = useParams<{ accessLink: string }>();
+
   return (
     <div className="min-h-screen flex flex-col items-center justify-center gap-4 p-6">
       <AlertCircle className="h-12 w-12 text-destructive" aria-hidden="true" />
@@ -20,7 +24,15 @@ export default function AttemptError({
           <span className="block font-mono text-xs mt-1">({error.digest})</span>
         )}
       </p>
-      <Button onClick={reset} variant="outline">Retry</Button>
+      <div className="flex gap-3">
+        <Button onClick={reset} variant="outline">Retry</Button>
+        <Button
+          onClick={() => router.push(`/exam/${params.accessLink}/login`)}
+          variant="secondary"
+        >
+          Back to Login
+        </Button>
+      </div>
     </div>
   );
 }

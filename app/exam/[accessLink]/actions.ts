@@ -1,6 +1,7 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
+import { signSessionCookie, verifySessionCookie } from "@/lib/session";
 import { candidateSignInSchema } from "@/lib/validations/auth";
 import bcrypt from "bcryptjs";
 import { cookies } from "next/headers";
@@ -38,9 +39,10 @@ export async function signInCandidate(input: unknown) {
     return { error: "You have already completed this exam" };
   }
 
-  // Set candidate session cookie
+  const maxAge = (exam.durationMinutes + 30) * 60;
+
   const cookieStore = await cookies();
-  cookieStore.set("candidate_session", JSON.stringify({
+  cookieStore.set("candidate_session", signSessionCookie({
     candidateId: candidate.id,
     examId: exam.id,
     attemptId: existingAttempt?.id || null,
@@ -48,7 +50,7 @@ export async function signInCandidate(input: unknown) {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
-    maxAge: 60 * 60 * 3, // 3 hours
+    maxAge,
     path: "/",
   });
 
@@ -63,17 +65,12 @@ export async function signInCandidate(input: unknown) {
 }
 
 export async function startExam() {
-  // Read IDs from the server-side session cookie — never trust client-supplied IDs
   const cookieStore = await cookies();
   const raw = cookieStore.get("candidate_session")?.value;
   if (!raw) return { error: "Unauthorized" };
 
-  let session: { candidateId: string; examId: string; attemptId: string | null };
-  try {
-    session = JSON.parse(raw);
-  } catch {
-    return { error: "Invalid session" };
-  }
+  const session = verifySessionCookie(raw);
+  if (!session) return { error: "Invalid session" };
 
   const { candidateId, examId } = session;
 
@@ -120,8 +117,9 @@ export async function startExam() {
     data: { isUsed: true },
   });
 
-  // Update session cookie with the new attemptId so API routes can verify it
-  cookieStore.set("candidate_session", JSON.stringify({
+  const maxAge = (exam.durationMinutes + 30) * 60;
+
+  cookieStore.set("candidate_session", signSessionCookie({
     candidateId,
     examId,
     attemptId: attempt.id,
@@ -129,7 +127,7 @@ export async function startExam() {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
-    maxAge: 60 * 60 * 3,
+    maxAge,
     path: "/",
   });
 
@@ -138,16 +136,7 @@ export async function startExam() {
 
 export async function getCandidateSession() {
   const cookieStore = await cookies();
-  const session = cookieStore.get("candidate_session");
-  if (!session) return null;
-  try {
-    return JSON.parse(session.value) as {
-      candidateId: string;
-      examId: string;
-      attemptId: string | null;
-    };
-  } catch {
-    console.error("[getCandidateSession] Failed to parse session cookie");
-    return null;
-  }
+  const raw = cookieStore.get("candidate_session")?.value;
+  if (!raw) return null;
+  return verifySessionCookie(raw);
 }
